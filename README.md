@@ -48,7 +48,7 @@
 Daca acest tool ti-a economisit timp:
 
 - [Revolut](https://revolut.me/mtvtrk)
-- [Stripe - Card/Apple/Google Pay](https://donate.stripe.com/cNi4gs9dB8wv4GXa6Vbsc00)
+- [Stripe - Card/Apple/Google Pay](https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01)
 
 ---
 

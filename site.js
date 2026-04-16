@@ -6,7 +6,7 @@ window.SubtitlesFixerConfig = {
   downloadUrl: "https://github.com/cosmintrica/SubtitlesFixer/releases/latest",
   donateUrl: "#", // Handled via dropdown
   revolutUrl: "https://revolut.me/mtvtrk",
-  stripeUrl: "https://donate.stripe.com/cNi4gs9dB8wv4GXa6Vbsc00",
+  stripeUrl: "https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01",
   linkedInUrl: "https://www.linkedin.com/in/cosmintrica/",
   githubUrl: "https://github.com/cosmintrica/SubtitlesFixer"
 };
