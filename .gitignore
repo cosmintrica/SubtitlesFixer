@@ -1,0 +1,31 @@
+# .NET Core
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Tt]est[Rr]esults/
+*.user
+*.userosscache
+*.sln.doccache
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.doccache
+*.cache
+*.opendb
+*.db
+*.db-shm
+*.db-wal
+*.tmp
+*.temp
+*.swp
+*.orig
+
+# VS Code
+.vscode/
+
+# Project specific
+release-site/node_modules/
+.gemini/

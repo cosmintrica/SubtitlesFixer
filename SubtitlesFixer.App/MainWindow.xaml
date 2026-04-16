@@ -1,0 +1,207 @@
+<ui:FluentWindow x:Class="SubtitlesFixer.App.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 mc:Ignorable="d"
+                 Title="Subtitles Fixer"
+                 Height="1000"
+                 Width="1360"
+                 MinHeight="760"
+                 MinWidth="1000"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="Subtitles Fixer" />
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="24,12,24,20">
+            <StackPanel MaxWidth="1440"
+                        HorizontalAlignment="Stretch">
+                <TextBlock Margin="0,0,0,8"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           Text="Alege folderul, verifica rapid ce se schimba si ruleaza doar cand totul arata bine." />
+                <TextBlock Margin="0,0,0,16"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap"
+                           Text="Analiza doar verifica. Fisierele se modifica abia cand apesi Ruleaza fix." />
+
+                <ui:Card Margin="0,0,0,14" Padding="18">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="1. Alege folderul" />
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox x:Name="FolderPathBox"
+                                     Grid.Column="0"
+                                     Margin="0,0,10,0"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="FolderPathBox_TextChanged" />
+
+                            <ui:Button x:Name="BrowseButton"
+                                       Grid.Column="1"
+                                       Appearance="Secondary"
+                                       Content="Rasfoieste..."
+                                       Click="BrowseButton_Click" />
+                        </Grid>
+
+                        <WrapPanel Margin="0,12,0,0"
+                                   ItemHeight="30"
+                                   ItemWidth="420">
+                            <CheckBox x:Name="RecurseCheckBox"
+                                      Margin="0,0,12,8"
+                                      Content="Scaneaza si subfolderele"
+                                      IsChecked="True"
+                                      Checked="OptionChanged"
+                                      Unchecked="OptionChanged" />
+                            <CheckBox x:Name="OverwriteRoCheckBox"
+                                      Margin="0,0,12,8"
+                                       Content="Refa .ro.srt existent (varianta veche merge in backup)"
+                                       ToolTip="Daca nu bifezi asta, episoadele care au deja .ro.srt raman neschimbate."
+                                      Checked="OptionChanged"
+                                      Unchecked="OptionChanged" />
+                        </WrapPanel>
+
+                        <TextBlock x:Name="PlanHintTextBlock"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Ai schimbat folderul sau optiunile. Ruleaza din nou analiza ca sa vezi rezultatul corect." />
+                    </StackPanel>
+                </ui:Card>
+
+                <WrapPanel Margin="0,0,0,16"
+                           VerticalAlignment="Center">
+                    <ui:Button x:Name="AnalyzeButton"
+                               Margin="0,0,10,10"
+                               Appearance="Secondary"
+                               Content="Analizeaza"
+                               Click="AnalyzeButton_Click" />
+                    <ui:Button x:Name="RunButton"
+                               Margin="0,0,16,10"
+                               Appearance="Primary"
+                               Content="Ruleaza fix"
+                               Click="RunButton_Click" />
+                    <TextBlock x:Name="StatusTextBlock"
+                               Margin="0,2,0,10"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Pregatit." />
+                </WrapPanel>
+                <ProgressBar x:Name="WorkProgressBar"
+                             Margin="0,-4,0,18"
+                             Height="4"
+                             Minimum="0"
+                             Maximum="100"
+                             Visibility="Collapsed"
+                             Value="0" />
+
+                <TabControl x:Name="MainTabs">
+                    <TabItem x:Name="PlanTab"
+                             Header="Analiza">
+                        <StackPanel Margin="0,14,0,0">
+                            <TextBlock Margin="0,0,0,8"
+                                       FontWeight="SemiBold"
+                                       FontSize="15"
+                                       Text="2. Ce se va intampla" />
+                            <TextBlock Margin="0,0,0,10"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Serialele si filmele sunt separate automat. Deschide doar titlul care te intereseaza." />
+
+                            <Border Padding="12"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                    <StackPanel x:Name="PlanSummaryPanel">
+                                        <TextBlock x:Name="PlanPlaceholderText"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Text="Apasa Analizeaza ca sa vezi ce se schimba si unde trebuie aleasa manual subtitrarea." />
+                                    </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </TabItem>
+
+                    <TabItem x:Name="LastRunTab"
+                             Header="Restore">
+                        <StackPanel Margin="0,14,0,0">
+                            <TextBlock Margin="0,0,0,8"
+                                       FontWeight="SemiBold"
+                                       FontSize="15"
+                                       Text="3. Restore din backup" />
+                            <TextBlock x:Name="LastRunInfoText"
+                                       Margin="0,0,0,10"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Ultima rulare salvata apare aici. Selecteaza ce vrei sa readuci din backup." />
+
+                            <WrapPanel Margin="0,0,0,12">
+                                <ui:Button x:Name="SelectAllRestoreButton"
+                                           Margin="0,0,10,10"
+                                           Appearance="Secondary"
+                                           Content="Selecteaza toate"
+                                           Click="SelectAllRestoreButton_Click" />
+                                <ui:Button x:Name="ClearRestoreSelectionButton"
+                                           Margin="0,0,10,10"
+                                           Appearance="Secondary"
+                                           Content="Curata selectia"
+                                           Click="ClearRestoreSelectionButton_Click" />
+                                <ui:Button x:Name="RestoreSelectedButton"
+                                           Margin="0,0,10,10"
+                                           Appearance="Primary"
+                                           Content="Ruleaza restore"
+                                           Click="RestoreSelectedButton_Click" />
+                            </WrapPanel>
+
+                            <Border Padding="12"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                    <StackPanel x:Name="LastRunSummaryPanel">
+                                        <TextBlock x:Name="LastRunPlaceholderText"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Text="Nu exista inca o rulare salvata." />
+                                    </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </TabItem>
+
+                    <TabItem Header="Jurnal">
+                        <TextBox x:Name="LogTextBox"
+                                 MinHeight="420"
+                                 Margin="0,14,0,0"
+                                 AcceptsReturn="True"
+                                 FontFamily="Consolas"
+                                 FontSize="11.5"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto" />
+                    </TabItem>
+                </TabControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</ui:FluentWindow>
