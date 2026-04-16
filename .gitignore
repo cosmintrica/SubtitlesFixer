@@ -3,5 +3,6 @@ publish/
 bin/
 obj/
 *.user
+backups/
 PUBLISH.md
 docs/PUBLISH.md

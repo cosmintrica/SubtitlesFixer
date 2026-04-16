@@ -35,13 +35,108 @@ Motive:
 
 Optional, mai tarziu:
 
-- `SubDL`
-- alt provider cu API clar si rate-limit decent
+- `Subs.ro API`
+- `SubDL API`
+- alti provideri cu API clar si rate-limit decent
 
 Nu recomand ca prima varianta:
 
 - scraping din site-uri fara API
 - fluxuri fragile care se rup des
+
+## Provideri candidati reali
+
+### 1. OpenSubtitles.com
+
+Pro:
+
+- API oficial REST
+- cautare dupa nume, IMDb, TMDb, hash, sezon, episod
+- acoperire buna pentru filme si seriale
+- limbi multe
+
+Contra:
+
+- rate limits si planuri care trebuie respectate
+- matching-ul trebuie filtrat bine pe release
+
+Rol propus:
+
+- provider principal general
+
+### 2. Subs.ro
+
+Pro:
+
+- API oficial publicat de site
+- foarte valoros pentru subtitrari in romana
+- cautare dupa IMDb, TMDb, titlu si release
+
+Contra:
+
+- necesita cheie API
+- are cota zilnica
+- acoperirea este mai ales buna pe romana, nu pe toate limbile
+
+Rol propus:
+
+- provider principal pentru `ro`
+
+### 3. SubDL
+
+Pro:
+
+- are API de search/download documentat
+- suporta search dupa film, fisier, IMDb, TMDb, sezon, episod si limbi
+- acoperire buna mai ales pe engleza si alte limbi populare
+
+Contra:
+
+- documentatia este marcata beta
+- trebuie gestionate rate limits si eventual schimbari de schema
+
+Rol propus:
+
+- provider secundar, foarte bun pentru fallback `en`
+
+### 4. SubtitleCat
+
+Pro:
+
+- acoperire mare observabila pe site
+- suporta multe limbi
+- are pagina enterprise unde mentioneaza bulk processing si API integration
+
+Contra:
+
+- nu am gasit documentatie publica clara pentru un API gratuit de search/download
+- practic, pentru varianta free ar insemna scraping
+- scraping-ul e mai fragil si trebuie verificat atent fata de ToS si rate limits
+
+Rol propus:
+
+- provider experimental, doar daca acceptam un adaptor de scraping separat
+
+## Strategie recomandata cu provideri multipli
+
+Nu vreau sa "lipim tot ce exista" intr-un singur bloc haotic. Varianta buna este o arhitectura cu provideri pluggable:
+
+1. `Subs.ro` pentru romana
+2. `OpenSubtitles.com` pentru general
+3. `SubDL` pentru fallback si extra coverage
+4. `SubtitleCat` doar experimental, separat, daca merita
+
+Fiecare provider intoarce acelasi model intern:
+
+- limba
+- score intern
+- release name
+- sursa
+- rating / downloads daca exista
+- link de download
+- tip: movie / series
+
+Apoi facem dedupe si ranking peste toate rezultatele, nu tratam fiecare site ca exceptie speciala in tot codul.
 
 ## Flux propus
 
@@ -67,12 +162,14 @@ Pentru fiecare item:
 
 1. cautare prioritara in `ro`
 2. daca nu gaseste, cautare in `en`
-3. ranking pe baza de:
+3. agregare rezultate din toti providerii activi
+4. ranking pe baza de:
    - hash
    - sezon / episod
    - release name
    - numar de download-uri / rating
    - hearing impaired / forced, daca vrem filtru
+   - incredere in provider
 
 ### Etapa 3 - download
 
@@ -193,12 +290,13 @@ Aici apar:
 
 ### Faza 1
 
-- OpenSubtitles API
-- cautare doar in romana
+- `Subs.ro API` pentru romana
+- `OpenSubtitles.com API` ca fallback general
 - preview + selectie manuala
 
 ### Faza 2
 
+- `SubDL API` pentru extra coverage si limbi
 - fallback la cautare in engleza
 - fara traducere inca
 
@@ -209,7 +307,7 @@ Aici apar:
 
 ### Faza 4
 
-- mai multi provideri
+- `SubtitleCat` sau alti provideri de scraping, daca chiar merita
 - mai multe limbi
 
 ## Riscuri
@@ -224,9 +322,11 @@ Aici apar:
 
 Cea mai buna ruta pentru proiectul tau este:
 
-1. `OpenSubtitles API`
-2. cautare batch pentru `ro`
-3. fallback la `en`
-4. traducere ca pas separat, activata doar daca userul vrea
+1. `Subs.ro API` pentru `ro`
+2. `OpenSubtitles.com API` pentru baza generala
+3. `SubDL API` ca fallback si acoperire suplimentara
+4. cautare batch pentru `ro`
+5. fallback la `en`
+6. traducere ca pas separat, activata doar daca userul vrea
 
 Asa ramai cu un v1 realist, util si controlabil, fara sa transformi aplicatia intr-un monstru greu de mentinut.
