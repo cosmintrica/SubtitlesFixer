@@ -774,15 +774,17 @@ img.mockup-icon {
 
   .donate-menu {
     position: relative;
-    top: 12px;
-    left: 0;
+    top: 10px;
+    left: 0 !important;
+    right: 0 !important;
     transform: none !important;
     width: 100%;
     flex-direction: column;
-    display: none; /* Hidden by default */
+    display: none;
     opacity: 1;
     pointer-events: auto;
     margin-bottom: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
   }
 
   .donate-container.active .donate-menu {
