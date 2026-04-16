@@ -88,6 +88,41 @@ function Normalize-RO {
   $s = $s.Replace([string][char]0x015E, [string][char]0x0218)  # S-cedilla -> S-comma
   $s = $s.Replace([string][char]0x0163, [string][char]0x021B)  # t-cedilla -> t-comma
   $s = $s.Replace([string][char]0x0162, [string][char]0x021A)  # T-cedilla -> T-comma
+  
+  # Heuristic fix for broken hardcoded '?' instead of diacritics
+  $qDict = @{
+    "ni\?te"="niște"; "Ni\?te"="Niște"
+    "mul\?umesc"="mulțumesc"; "Mul\?umesc"="Mulțumesc"
+    "totu\?i"="totuși"; "Totu\?i"="Totuși"
+    "v-a\?i"="v-ați"; "V-a\?i"="V-ați"
+    "l-a\?i"="l-ați"; "L-a\?i"="L-ați"
+    "i-a\?i"="i-ați"; "I-a\?i"="I-ați"
+    "fa\?ă"="față"; "Fa\?ă"="Față"
+    "via\?ă"="viață"; "Via\?ă"="Viață"
+    "pu\?in"="puțin"; "Pu\?in"="Puțin"
+    "căr\?i"="cărți"; "Căr\?i"="Cărți"
+    "părin\?i"="părinți"; "Părin\?i"="Părinți"
+    "băie\?i"="băieți"; "Băie\?i"="Băieți"
+    "a\?tept"="aștept"; "A\?tept"="Aștept"
+    "învă\?a"="învăța"; "Învă\?a"="Învăța"
+    "a\?a"="așa"; "A\?a"="Așa"
+    "ma\?ină"="mașină"; "Ma\?ină"="Mașină"
+    "ve\?ti"="vești"; "Ve\?ti"="Vești"
+    "fra\?i"="frați"; "Fra\?i"="Frați"
+    "câ\?iva"="câțiva"; "Câ\?iva"="Câțiva"
+    "spa\?iu"="spațiu"; "Spa\?iu"="Spațiu"
+    "cunoa\?te"="cunoaște"; "Cunoa\?te"="Cunoaște"
+    "lini\?te"="liniște"; "Lini\?te"="Liniște"
+    "poveste\?te"="povestește"; "Poveste\?te"="Povestește"
+    "plăte\?te"="plătește"; "Plăte\?te"="Plătește"
+    "vorbe\?te"="vorbește"; "Vorbe\?te"="Vorbește"
+    "dore\?te"="dorește"; "Dore\?te"="Dorește"
+    "prive\?te"="privește"; "Prive\?te"="Privește"
+  }
+  foreach ($k in $qDict.Keys) {
+    if ($s -match $k) { $s = $s -replace $k, $qDict[$k] }
+  }
+
   return $s
 }
 
