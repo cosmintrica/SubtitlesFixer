@@ -27,6 +27,12 @@
 4. Apasa **Analiza** pentru a vedea exact ce se va schimba.
 5. Apasa **Run Fix** - backup e facut, `.ro.srt` e scris, diacriticele sunt corecte.
 
+> [!NOTE]
+> **De ce are aplicația ~160 MB?**
+> Am ales să o distribui în modul **„Self-Contained”**. Aceasta înseamnă că tot ecosistemul Microsoft .NET este complet integrat în acel fișier.
+>
+> Astfel, aplicația ta merge direct din prima secundă, fără ecrane plictisitoare de instalare auxiliare (cum ar fi *"You need to install .NET Desktop Runtime"*), care deranjează experiența oricărui utilizator.
+
 ---
 
 ## Tehnologii

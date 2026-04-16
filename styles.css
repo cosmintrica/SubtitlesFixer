@@ -762,6 +762,22 @@ img.mockup-icon {
     justify-content: center;
   }
 
+  .donate-container {
+    width: 100%;
+  }
+
+  .donate-menu {
+    top: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(10px) !important;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .donate-container.active .donate-menu {
+    transform: translateX(-50%) translateY(0) !important;
+  }
+
   .cta-inner {
     padding: 40px 24px;
   }
