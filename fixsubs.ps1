@@ -118,6 +118,31 @@ function Normalize-RO {
     @("fa\?ă", "față"), @("Fa\?ă", "Față"),
     @("via\?ă", "viață"), @("Via\?ă", "Viață"),
     @("pu\?in", "puţin"), @("Pu\?in", "Puţin"),
+    @("le\?inat", "leșinat"), @("Le\?inat", "Leșinat"),
+    @("le\?ină", "leșină"), @("Le\?ină", "Leșină"),
+    @("le\?in", "leșin"), @("Le\?in", "Leșin"),
+    @("ie\?it", "ieșit"), @("Ie\?it", "Ieșit"),
+    @("ie\?ire", "ieșire"), @("Ie\?ire", "Ieșire"),
+    @("u\?ă", "ușă"), @("U\?ă", "Ușă"),
+    @("a\?ezat", "așezat"), @("A\?ezat", "Așezat"),
+    @("a\?eza", "așeza"), @("A\?eza", "Așeza"),
+    @("a\?ază", "așază"), @("A\?ază", "Așază"),
+    @("găse\?te", "găsește"), @("Găse\?te", "Găsește"),
+    @("găsi\?i", "găsiți"), @("Găsi\?i", "Găsiți"),
+    @("lipse\?te", "lipsește"), @("Lipse\?te", "Lipsește"),
+    @("sfâr\?ește", "sfârșește"), @("Sfâr\?ește", "Sfârșește"),
+    @("grăbe\?te", "grăbește"), @("Grăbe\?te", "Grăbește"),
+    @("hotără\?te", "hotărăște"), @("Hotără\?te", "Hotărăște"),
+    @("fere\?te", "ferește"), @("Fere\?te", "Ferește"),
+    @("de\?tept", "deștept"), @("De\?tept", "Deștept"),
+    @("de\?teaptă", "deșteaptă"), @("De\?teaptă", "Deșteaptă"),
+    @("mo\?tenire", "moștenire"), @("Mo\?tenire", "Moștenire"),
+    @("mo\?tenit", "moștenit"), @("Mo\?tenit", "Moștenit"),
+    @("gre\?esc", "greșesc"), @("Gre\?esc", "Greșesc"),
+    @("dore\?ti", "dorești"), @("Dore\?ti", "Dorești"),
+    @("vorbe\?ti", "vorbești"), @("Vorbe\?ti", "Vorbești"),
+    @("cite\?te", "citește"), @("Cite\?te", "Citește"),
+    @("sim\?i", "simți"), @("Sim\?i", "Simți"),
     @("căr\?i", "cărți"), @("Căr\?i", "Cărți"),
     @("părin\?i", "părinți"), @("Părin\?i", "Părinți"),
     @("băie\?i", "băieți"), @("Băie\?i", "Băieți"),
@@ -146,7 +171,7 @@ function Normalize-RO {
   )
 
   foreach ($pair in $qList) {
-    if ($s -match $pair[0]) { $s = $s -replace $pair[0], $pair[1] }
+    if ($s -cmatch $pair[0]) { $s = $s -creplace $pair[0], $pair[1] }
   }
 
   return $s
