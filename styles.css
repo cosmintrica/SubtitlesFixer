@@ -778,21 +778,24 @@ img.mockup-icon {
   top: 50%;
   left: calc(100% + 12px);
   transform: translateY(-40%) translateX(10px);
-  width: 240px;
+  width: max-content;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 6px;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-  display: none;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
   z-index: 100;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 200ms, transform 200ms;
 }
 
 .donate-container.active .donate-menu {
-  display: block;
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(-50%) translateX(0);
 }
 
