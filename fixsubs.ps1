@@ -90,63 +90,63 @@ function Normalize-RO {
   $s = $s.Replace([string][char]0x0162, [string][char]0x021A)  # T-cedilla -> T-comma
   
   # Heuristic fix for broken hardcoded '?' instead of diacritics
-  $qDict = @{
-    "ni\?te"="niște"; "Ni\?te"="Niște"
-    "totu\?i"="totuși"; "Totu\?i"="Totuși"
-    "a\?tept"="aștept"; "A\?tept"="Aștept"
-    "a\?a"="așa"; "A\?a"="Așa"
-    "a\?adar"="așadar"; "A\?adar"="Așadar"
-    "ma\?ină"="mașină"; "Ma\?ină"="Mașină"
-    "ve\?ti"="vești"; "Ve\?ti"="Vești"
-    "cunoa\?te"="cunoaște"; "Cunoa\?te"="Cunoaște"
-    "lini\?te"="liniște"; "Lini\?te"="Liniște"
-    "poveste\?te"="povestește"; "Poveste\?te"="Povestește"
-    "plăte\?te"="plătește"; "Plăte\?te"="Plătește"
-    "vorbe\?te"="vorbește"; "Vorbe\?te"="Vorbește"
-    "dore\?te"="dorește"; "Dore\?te"="Dorește"
-    "prive\?te"="privește"; "Prive\?te"="Privește"
-    "gre\?it"="greșit"; "Gre\?it"="Greșit"
-    "gre\?eală"="greșeală"; "Gre\?eală"="Greșeală"
-    "sfâr\?it"="sfârșit"; "Sfâr\?it"="Sfârșit"
-    "lini\?tit"="liniștit"; "Lini\?tit"="Liniștit"
-    "reu\?it"="reușit"; "Reu\?it"="Reușit"
-    "u\?or"="ușor"; "U\?or"="Ușor"
-    "ru\?ine"="rușine"; "Ru\?ine"="Rușine"
-    "ro\?u"="roșu"; "Ro\?u"="Roșu"
+  # We use a list of pairs because PowerShell hash tables are case-insensitive by default
+  $qList = @(
+    @("ni\?te", "niște"), @("Ni\?te", "Niște"),
+    @("totu\?i", "totuși"), @("Totu\?i", "Totuși"),
+    @("a\?tept", "aștept"), @("A\?tept", "Aștept"),
+    @("a\?a", "așa"), @("A\?a", "Așa"),
+    @("a\?adar", "aşadar"), @("A\?adar", "Aşadar"),
+    @("ma\?ină", "maşină"), @("Ma\?ină", "Maşină"),
+    @("ve\?ti", "vești"), @("Ve\?ti", "Vești"),
+    @("cunoa\?te", "cunoaște"), @("Cunoa\?te", "Cunoaște"),
+    @("lini\?te", "liniște"), @("Lini\?te", "Liniște"),
+    @("poveste\?te", "povestește"), @("Poveste\?te", "Povestește"),
+    @("plăte\?te", "plătește"), @("Plăte\?te", "Plătește"),
+    @("vorbe\?te", "vorbește"), @("Vorbe\?te", "Vorbește"),
+    @("dore\?te", "dorește"), @("Dore\?te", "Dorește"),
+    @("prive\?te", "privește"), @("Prive\?te", "Privește"),
+    @("gre\?it", "greșit"), @("Gre\?it", "Greșit"),
+    @("gre\?eală", "greșeală"), @("Gre\?eală", "Greșeală"),
+    @("sfâr\?it", "sfârșit"), @("Sfâr\?it", "Sfârșit"),
+    @("lini\?tit", "liniștit"), @("Lini\?tit", "Liniștit"),
+    @("reu\?it", "reușit"), @("Reu\?it", "Reușit"),
+    @("u\?or", "ușor"), @("U\?or", "Ușor"),
+    @("ru\?ine", "rușine"), @("Ru\?ine", "Rușine"),
+    @("ro\?u", "roșu"), @("Ro\?u", "Roșu"),
+    @("mul\?umesc", "mulțumesc"), @("Mul\?umesc", "Mulțumesc"),
+    @("fa\?ă", "față"), @("Fa\?ă", "Față"),
+    @("via\?ă", "viață"), @("Via\?ă", "Viață"),
+    @("pu\?in", "puţin"), @("Pu\?in", "Puţin"),
+    @("căr\?i", "cărți"), @("Căr\?i", "Cărți"),
+    @("părin\?i", "părinți"), @("Părin\?i", "Părinți"),
+    @("băie\?i", "băieți"), @("Băie\?i", "Băieți"),
+    @("băie\?el", "băiețel"), @("Băie\?el", "Băiețel"),
+    @("învă\?a", "învăța"), @("Învă\?a", "Învăța"),
+    @("fra\?i", "frați"), @("Fra\?i", "Frați"),
+    @("câ\?iva", "câțiva"), @("Câ\?iva", "Câțiva"),
+    @("spa\?iu", "spațiu"), @("Spa\?iu", "Spațiu"),
+    @("diminea\?a", "dimineața"), @("Diminea\?a", "Dimineața"),
+    @("bra\?e", "brațe"), @("Bra\?e", "Brațe"),
+    @("cu\?it", "cuțit"), @("Cu\?it", "Cuțit"),
+    @("poli\?ie", "poliţie"), @("Poli\?ie", "Poliţie"),
+    @("poli\?ia", "poliţia"), @("Poli\?ia", "Poliţia"),
+    @("aten\?ie", "atenţie"), @("Aten\?ie", "Atenţie"),
+    @("condi\?ii", "condiţii"), @("Condi\?ii", "Condiţii"),
+    @("situa\?ie", "situaţie"), @("Situa\?ie", "Situaţie"),
+    @("v-a\?i", "v-ați"), @("V-a\?i", "V-ați"),
+    @("l-a\?i", "l-ați"), @("L-a\?i", "L-ați"),
+    @("i-a\?i", "i-ați"), @("I-a\?i", "I-ați"),
+    @("ne-a\?i", "ne-ați"), @("Ne-a\?i", "Ne-ați"),
+    @("le-a\?i", "le-ați"), @("Le-a\?i", "Le-ați"),
+    @("te-a\?i", "te-ați"), @("Te-a\?i", "Te-ați"),
+    @("m-a\?i", "m-ați"), @("M-a\?i", "M-ați"),
+    @("n-a\?i", "n-ați"), @("N-a\?i", "N-ați"),
+    @("c-a\?i", "c-ați"), @("C-a\?i", "C-ați")
+  )
 
-    "mul\?umesc"="mulțumesc"; "Mul\?umesc"="Mulțumesc"
-    "fa\?ă"="față"; "Fa\?ă"="Față"
-    "via\?ă"="viață"; "Via\?ă"="Viață"
-    "pu\?in"="puțin"; "Pu\?in"="Puțin"
-    "căr\?i"="cărți"; "Căr\?i"="Cărți"
-    "părin\?i"="părinți"; "Părin\?i"="Părinți"
-    "băie\?i"="băieți"; "Băie\?i"="Băieți"
-    "băie\?el"="băiețel"; "Băie\?el"="Băiețel"
-    "învă\?a"="învăța"; "Învă\?a"="Învăța"
-    "fra\?i"="frați"; "Fra\?i"="Frați"
-    "câ\?iva"="câțiva"; "Câ\?iva"="Câțiva"
-    "spa\?iu"="spațiu"; "Spa\?iu"="Spațiu"
-    "diminea\?a"="dimineața"; "Diminea\?a"="Dimineața"
-    "bra\?e"="brațe"; "Bra\?e"="Brațe"
-    "cu\?it"="cuțit"; "Cu\?it"="Cuțit"
-    "poli\?ie"="poliție"; "Poli\?ie"="Poliție"
-    "poli\?ia"="poliția"; "Poli\?ia"="Poliția"
-    "aten\?ie"="atenție"; "Aten\?ie"="Atenție"
-    "condi\?ii"="condiții"; "Condi\?ii"="Condiții"
-    "situa\?ie"="situație"; "Situa\?ie"="Situație"
-
-    "v-a\?i"="v-ați"; "V-a\?i"="V-ați"
-    "l-a\?i"="l-ați"; "L-a\?i"="L-ați"
-    "i-a\?i"="i-ați"; "I-a\?i"="I-ați"
-    "ne-a\?i"="ne-ați"; "Ne-a\?i"="Ne-ați"
-    "le-a\?i"="le-ați"; "Le-a\?i"="Le-ați"
-    "te-a\?i"="te-ați"; "Te-a\?i"="Te-ați"
-    "m-a\?i"="m-ați"; "M-a\?i"="M-ați"
-    "n-a\?i"="n-ați"; "N-a\?i"="N-ați"
-    "c-a\?i"="c-ați"; "C-a\?i"="C-ați"
-  }
-  foreach ($k in $qDict.Keys) {
-    if ($s -match $k) { $s = $s -replace $k, $qDict[$k] }
+  foreach ($pair in $qList) {
+    if ($s -match $pair[0]) { $s = $s -replace $pair[0], $pair[1] }
   }
 
   return $s
