@@ -1,4 +1,4 @@
-<ui:FluentWindow x:Class="SubtitlesFixer.App.MainWindow"
+﻿<ui:FluentWindow x:Class="SubtitlesFixer.App.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -233,7 +233,7 @@
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            FontSize="11.5"
-                           Text="Subtitles Fixer v1.0.5 · Cosmin Trica" />
+                           Text="Subtitles Fixer v1.0.7 · Cosmin Trica" />
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
@@ -244,8 +244,8 @@
                                Margin="0,0,6,0"
                                Text="Sustine proiectul:" />
                     <ui:HyperlinkButton Content="Revolut"
-                                        FontSize="11.5"
-                                        Padding="6,2"
+                                        FontSize="10.5"
+                                        Padding="4,2"
                                         NavigateUri="https://revolut.me/mtvtrk"
                                         ToolTip="Doneaza prin Revolut" />
                     <TextBlock VerticalAlignment="Center"
@@ -254,8 +254,8 @@
                                Margin="2,0"
                                Text="·" />
                     <ui:HyperlinkButton Content="Card/Apple/Google Pay"
-                                        FontSize="11.5"
-                                        Padding="6,2"
+                                        FontSize="10.5"
+                                        Padding="4,2"
                                         NavigateUri="https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01"
                                         ToolTip="Doneaza prin Stripe" />
                     <TextBlock VerticalAlignment="Center"
@@ -264,8 +264,8 @@
                                Margin="2,0"
                                Text="·" />
                     <ui:HyperlinkButton Content="GitHub"
-                                        FontSize="11.5"
-                                        Padding="6,2"
+                                        FontSize="10.5"
+                                        Padding="4,2"
                                         NavigateUri="https://github.com/cosmintrica/SubtitlesFixer"
                                         ToolTip="Cod sursa pe GitHub" />
                 </StackPanel>

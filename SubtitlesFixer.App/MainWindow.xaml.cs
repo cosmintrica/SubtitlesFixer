@@ -1,4 +1,4 @@
-using System.Diagnostics;
+ï»¿using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -49,11 +49,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Loaded += MainWindow_Loaded;
         Closed += (_, _) => UpdateService.Release(_preparedUpdate?.Manager);
 
-        // Footer version — read from assembly so it updates automatically
+        // Footer version ï¿½ read from assembly so it updates automatically
         var assembly = typeof(MainWindow).Assembly;
         var infoAttr = (System.Reflection.AssemblyInformationalVersionAttribute?)System.Attribute.GetCustomAttribute(assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
         var version = infoAttr?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "?";
-        FooterVersionText.Text = $"Subtitles Fixer v{version} · Cosmin Trica";
+        // MSBuild / Velopack pot adauga un suffix +gitsha la InformationalVersion
+        var plusIdx = version.IndexOf('+');
+        if (plusIdx > 0) version = version[..plusIdx];
+        FooterVersionText.Text = $"Subtitles Fixer v{version} ï¿½ Cosmin Trica";
     }
 
     private void FolderPathBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -621,7 +624,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         proc.BeginErrorReadLine();
 
         await proc.WaitForExitAsync().ConfigureAwait(true);
-        proc.WaitForExit();
+        // WaitForExit() fara timeout este necesar pentru a drena bufferele de output
+        // asincrone (BeginOutputReadLine), dar trebuie rulat pe un background thread
+        // ca sa nu blocheze UI dispatcher-ul cu 30-60 secunde.
+        await Task.Run(() => proc.WaitForExit()).ConfigureAwait(true);
 
         AppendLogLine(string.Empty);
         AppendLogLine($"[Proces incheiat cu codul {proc.ExitCode}]");
