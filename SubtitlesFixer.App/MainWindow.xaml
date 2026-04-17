@@ -20,6 +20,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0"
@@ -213,5 +214,62 @@
                 </TabControl>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Footer -->
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,8,24,8"
+                Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="FooterVersionText"
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           FontSize="11.5"
+                           Text="Subtitles Fixer v1.0.5 · Cosmin Trica" />
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="11.5"
+                               Margin="0,0,6,0"
+                               Text="Sustine proiectul:" />
+                    <ui:HyperlinkButton Content="Revolut"
+                                        FontSize="11.5"
+                                        Padding="6,2"
+                                        NavigateUri="https://revolut.me/mtvtrk"
+                                        ToolTip="Doneaza prin Revolut" />
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               FontSize="11.5"
+                               Margin="2,0"
+                               Text="·" />
+                    <ui:HyperlinkButton Content="Card/Apple/Google Pay"
+                                        FontSize="11.5"
+                                        Padding="6,2"
+                                        NavigateUri="https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01"
+                                        ToolTip="Doneaza prin Stripe" />
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               FontSize="11.5"
+                               Margin="2,0"
+                               Text="·" />
+                    <ui:HyperlinkButton Content="GitHub"
+                                        FontSize="11.5"
+                                        Padding="6,2"
+                                        NavigateUri="https://github.com/cosmintrica/SubtitlesFixer"
+                                        ToolTip="Cod sursa pe GitHub" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </ui:FluentWindow>

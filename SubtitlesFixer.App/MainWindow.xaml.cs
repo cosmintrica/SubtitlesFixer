@@ -48,6 +48,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         Loaded += MainWindow_Loaded;
         Closed += (_, _) => UpdateService.Release(_preparedUpdate?.Manager);
+
+        // Footer version — read from assembly so it updates automatically
+        var assembly = typeof(MainWindow).Assembly;
+        var infoAttr = (System.Reflection.AssemblyInformationalVersionAttribute?)System.Attribute.GetCustomAttribute(assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+        var version = infoAttr?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "?";
+        FooterVersionText.Text = $"Subtitles Fixer v{version} · Cosmin Trica";
     }
 
     private void FolderPathBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -2220,3 +2226,4 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private sealed record RestoreOutcome(string VideoPath, bool Success, string Message);
     private sealed record RestoreProgress(int Current, int Total, string Label);
 }
+
