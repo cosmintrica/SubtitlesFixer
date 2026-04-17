@@ -44,10 +44,50 @@ window.SubtitlesFixerConfig = {
   // Version text in hero button
   const heroVersion = document.getElementById("hero-version-text");
   if (heroVersion) heroVersion.textContent = `v${config.version}`;
+  const bottomVersion = document.getElementById("download-version-bottom");
+  if (bottomVersion) bottomVersion.textContent = `v${config.version}`;
 
   // Footer
   const footer = document.getElementById("footer-copy");
   if (footer) footer.textContent = config.copyright;
 
-  // Add click tracking or logging if needed (optional)
+  updateDownloadCounts();
+
+  async function updateDownloadCounts() {
+    try {
+      const response = await fetch("https://api.github.com/repos/cosmintrica/SubtitlesFixer/releases", {
+        headers: {
+          "Accept": "application/vnd.github+json"
+        }
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const releases = await response.json();
+      const totalDownloads = Array.isArray(releases)
+        ? releases.reduce((sum, release) => {
+            const releaseDownloads = Array.isArray(release.assets)
+              ? release.assets.reduce((assetSum, asset) => assetSum + (asset.download_count || 0), 0)
+              : 0;
+            return sum + releaseDownloads;
+          }, 0)
+        : 0;
+
+      if (totalDownloads <= 0) {
+        return;
+      }
+
+      const formattedCount = new Intl.NumberFormat("ro-RO").format(totalDownloads);
+      const label = `${formattedCount} descărcări pe GitHub`;
+      document.querySelectorAll("#download-count-top, #download-count-bottom").forEach(el => {
+        if (!el) return;
+        el.textContent = label;
+        el.hidden = false;
+      });
+    } catch {
+      // Daca GitHub nu raspunde sau limita API este depasita, lasam butonul curat fara count.
+    }
+  }
 })();

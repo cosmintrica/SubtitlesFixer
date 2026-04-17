@@ -16,37 +16,56 @@ internal static class ScriptLocator
             return _cachedPath;
 
         var sideBySide = Path.Combine(AppContext.BaseDirectory, "fixsubs.ps1");
-        if (File.Exists(sideBySide))
+        var sideBySideDictionary = Path.Combine(AppContext.BaseDirectory, "words_ro.gz");
+        if (File.Exists(sideBySide) && File.Exists(sideBySideDictionary))
         {
             _cachedPath = sideBySide;
             return _cachedPath;
         }
 
         var asm = Assembly.GetExecutingAssembly();
-        var resourceName = FindEmbeddedScriptName(asm);
-        if (resourceName is null)
+        var scriptResourceName = FindEmbeddedResourceName(asm, "fixsubs.ps1");
+        if (scriptResourceName is null)
+        {
+            if (File.Exists(sideBySide))
+            {
+                _cachedPath = sideBySide;
+                return _cachedPath;
+            }
+
             throw new InvalidOperationException(
                 "Lipsește fixsubs.ps1 lângă aplicație și nici resursă încorporată. Republish sau copiază fixsubs.ps1 lângă exe.");
+        }
 
         var dir = Path.Combine(Path.GetTempPath(), "SubtitlesFixer");
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, "fixsubs.ps1");
-        using (var stream = asm.GetManifestResourceStream(resourceName)
-               ?? throw new InvalidOperationException("Nu pot citi resursa fixsubs.ps1."))
-        using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read))
+        ExtractEmbeddedFile(asm, scriptResourceName, path, "fixsubs.ps1");
+
+        var dictionaryResourceName = FindEmbeddedResourceName(asm, "words_ro.gz");
+        if (dictionaryResourceName is not null)
         {
-            stream.CopyTo(fs);
+            var dictionaryPath = Path.Combine(dir, "words_ro.gz");
+            ExtractEmbeddedFile(asm, dictionaryResourceName, dictionaryPath, "words_ro.gz");
         }
 
         _cachedPath = path;
         return _cachedPath;
     }
 
-    private static string? FindEmbeddedScriptName(Assembly asm)
+    private static void ExtractEmbeddedFile(Assembly asm, string resourceName, string destinationPath, string displayName)
+    {
+        using var stream = asm.GetManifestResourceStream(resourceName)
+                           ?? throw new InvalidOperationException($"Nu pot citi resursa {displayName}.");
+        using var fs = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+        stream.CopyTo(fs);
+    }
+
+    private static string? FindEmbeddedResourceName(Assembly asm, string suffix)
     {
         foreach (var n in asm.GetManifestResourceNames())
         {
-            if (n.EndsWith("fixsubs.ps1", StringComparison.OrdinalIgnoreCase))
+            if (n.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 return n;
         }
 

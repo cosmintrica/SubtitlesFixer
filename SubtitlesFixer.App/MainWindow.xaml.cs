@@ -294,71 +294,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private async void RepairOnlyButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (!TryGetFolder(out var folder))
-            return;
-
-        SaveCurrentSettings(folder);
-
-        var recurse = RecurseCheckBox.IsChecked == true;
-
-        try
-        {
-            SetBusyState(true);
-            BeginWorkProgress("Repar");
-            StatusTextBlock.Text = "Repar subtitrari...";
-            AppendLogSection("REPARARE SUBTITRARI");
-
-            var payload = await StandaloneSubtitleRepairer.RepairFolderAsync(
-                    folder,
-                    recurse,
-                    new Progress<SubtitleRepairProgress>(progress =>
-                        UpdateWorkProgress(progress.Current, progress.Total, progress.Label)))
-                .ConfigureAwait(true);
-
-            if (payload.Items is not { Count: > 0 })
-            {
-                StatusTextBlock.Text = "Nu am gasit subtitrari.";
-                System.Windows.MessageBox.Show(
-                    "Nu am gasit niciun fisier .srt in folderul ales.",
-                    "Subtitles Fixer",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                return;
-            }
-
-            InitializeLastRunSelectionState(payload);
-            _lastRun = payload;
-            LastRunStore.Save(payload);
-            PopulateLastRunView(_lastRun);
-            MainTabs.SelectedItem = LastRunTab;
-
-            foreach (var item in payload.Items)
-                AppendLogLine($"[Repair] {(string.Equals(item.Status, "error", StringComparison.OrdinalIgnoreCase) ? "Eroare" : "OK")}: {item.VideoName} - {item.Message}");
-
-            var changedCount = payload.Items.Count(i => !string.IsNullOrWhiteSpace(i.ReplacedTargetBackupPath));
-            StatusTextBlock.Text = changedCount > 0
-                ? $"Reparare terminata. Au fost actualizate {changedCount} subtitrari."
-                : "Reparare terminata. Nu a fost nevoie de nicio schimbare.";
-        }
-        catch (Exception ex)
-        {
-            AppendLogLine("[EROARE REPARARE] " + ex.Message);
-            StatusTextBlock.Text = "Eroare.";
-            System.Windows.MessageBox.Show(
-                ex.Message,
-                "Subtitles Fixer",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-        finally
-        {
-            EndWorkProgress();
-            SetBusyState(false);
-        }
-    }
-
     private async void RestoreSelectedButton_Click(object sender, RoutedEventArgs e)
     {
         if (_lastRun?.Items is not { Count: > 0 })
@@ -577,6 +512,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         var path = CreateTempJsonPath("selection");
         var items = plan.Items
+            .Where(RequiresSubtitleSelection)
             .Where(i => !string.IsNullOrWhiteSpace(i.VideoPath))
             .Select(i => new
             {
@@ -866,7 +802,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var failed = payload.Items.Count(i => string.Equals(i.RestoreStatus, "failed", StringComparison.OrdinalIgnoreCase));
         var selected = payload.Items.Count(i => i.IsSelectedForRestore && CanRestoreItem(i));
         LastRunInfoText.Text = selected > 0
-            ? $"Ai selectat {selected} episod(e) pentru restore."
+            ? $"Ai selectat {selected} element(e) pentru restore."
             : "Ultima rulare salvata apare aici. Selecteaza ce vrei sa readuci din backup.";
 
         var header = new WrapPanel
@@ -1000,6 +936,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         var display = GetPlanDisplay(item, duplicateSelections);
         var accent = PlanStatusBrush(item, display.Status);
+        var isStandalone = IsStandaloneSubtitleMode(item.ItemMode);
 
         var border = new Border
         {
@@ -1048,10 +985,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         details.Children.Add(row1);
 
         if (!string.IsNullOrWhiteSpace(item.VideoName))
-            details.Children.Add(CreateDetailLine("Fisier video:", item.VideoName, emphasize: true));
+            details.Children.Add(CreateDetailLine(isStandalone ? "Fisier subtitrare:" : "Fisier video:", item.VideoName, emphasize: true));
 
-        if (!string.IsNullOrWhiteSpace(item.TargetName))
-            details.Children.Add(CreateDetailLine("Subtitrarea finala:", item.TargetName, emphasize: true));
+        if (!string.IsNullOrWhiteSpace(item.TargetName) &&
+            (!isStandalone || !string.Equals(item.TargetName, item.VideoName, StringComparison.OrdinalIgnoreCase)))
+        {
+            details.Children.Add(CreateDetailLine(isStandalone ? "Fisier dupa reparare:" : "Subtitrarea finala:", item.TargetName, emphasize: true));
+        }
 
         var candidates = item.Candidates ?? new List<FixPlanCandidate>();
         if (candidates.Count > 0)
@@ -1061,7 +1001,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         details.Children.Add(CreateDetailLine(
             "Ce fac aici:",
-            PlanActionLabel(item.Action),
+            PlanActionLabel(item),
             emphasize: false,
             margin: new Thickness(0, 0, 0, 6)));
 
@@ -1135,6 +1075,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private UIElement CreateLastRunCard(FixSummaryItem item)
     {
         var accent = RestoreAwareStatusBrush(item);
+        var isStandalone = IsStandaloneSubtitleMode(item.ItemMode);
 
         var border = new Border
         {
@@ -1205,11 +1146,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         details.Children.Add(row1);
 
         if (!string.IsNullOrWhiteSpace(item.VideoName))
-            details.Children.Add(CreateDetailLine("Fisier video:", item.VideoName, emphasize: true));
+            details.Children.Add(CreateDetailLine(isStandalone ? "Fisier subtitrare:" : "Fisier video:", item.VideoName, emphasize: true));
 
         if (string.Equals(item.Status, "ok", StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.IsNullOrWhiteSpace(item.SubtitleBefore) || !string.IsNullOrWhiteSpace(item.SubtitleAfter))
+            if (!isStandalone && (!string.IsNullOrWhiteSpace(item.SubtitleBefore) || !string.IsNullOrWhiteSpace(item.SubtitleAfter)))
                 details.Children.Add(CreateDetailLine(
                     "Subtitrare:",
                     $"{item.SubtitleBefore ?? "-"}  ->  {item.SubtitleAfter ?? "-"}",
@@ -1379,7 +1320,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             BrowseButton is null ||
             RecurseCheckBox is null ||
             OverwriteRoCheckBox is null ||
-            RepairOnlyButton is null ||
             SearchOnlineButton is null ||
             SelectAllRestoreButton is null ||
             ClearRestoreSelectionButton is null ||
@@ -1391,7 +1331,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var hasValidFolder = TryGetExistingFolder(FolderPathBox.Text, out _);
         AnalyzeButton.IsEnabled = !_isBusy && hasValidFolder;
         RunButton.IsEnabled = !_isBusy && hasValidFolder;
-        RepairOnlyButton.IsEnabled = !_isBusy && hasValidFolder;
         SearchOnlineButton.IsEnabled = !_isBusy;
 
         var hasRestorableItems = _lastRun?.Items?.Any(CanRestoreItem) == true;
@@ -1545,7 +1484,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             messages.Add("Aceeasi subtitrare este aleasa pentru mai multe episoade.");
 
         var missing = plan.Items?
-            .Where(IsRunnablePlanItem)
+            .Where(RequiresSubtitleSelection)
             .Where(i => string.IsNullOrWhiteSpace(i.SelectedSubtitlePath))
             .Select(i => $"{i.Episode ?? i.VideoName}: lipseste subtitrarea sursa.")
             .ToList();
@@ -1559,14 +1498,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static bool IsRunnablePlanItem(FixPlanItem item)
     {
         var action = (item.Action ?? string.Empty).Trim().ToLowerInvariant();
-        return (action == "create" || action == "overwrite")
-               && !string.IsNullOrWhiteSpace(item.SelectedSubtitlePath);
+        return action is "create" or "overwrite" or "repair";
+    }
+
+    private static bool RequiresSubtitleSelection(FixPlanItem item)
+    {
+        var action = (item.Action ?? string.Empty).Trim().ToLowerInvariant();
+        return action is "create" or "overwrite";
     }
 
     private static HashSet<string> GetDuplicatePlanSelectionPaths(FixPlanPayload payload)
     {
         return payload.Items?
-            .Where(IsRunnablePlanItem)
+            .Where(RequiresSubtitleSelection)
             .Where(i => !string.IsNullOrWhiteSpace(i.SelectedSubtitlePath))
             .GroupBy(i => i.SelectedSubtitlePath!, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1)
@@ -1578,6 +1522,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private static (string Status, string Message) GetPlanDisplay(FixPlanItem item, HashSet<string> duplicateSelections)
     {
         var baseStatus = (item.Status ?? string.Empty).Trim().ToLowerInvariant();
+        var action = (item.Action ?? string.Empty).Trim().ToLowerInvariant();
         var message = item.Message ?? string.Empty;
 
         if (baseStatus == "error" || baseStatus == "warn")
@@ -1586,7 +1531,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (!string.IsNullOrWhiteSpace(item.SelectedSubtitlePath) && duplicateSelections.Contains(item.SelectedSubtitlePath))
             return ("review", "Aceeasi subtitrare este aleasa si la alt episod. Alege aici varianta corecta.");
 
-        if (string.IsNullOrWhiteSpace(item.SelectedSubtitlePath))
+        if (action == "already-ok")
+            return ("ready", string.IsNullOrWhiteSpace(message)
+                ? IsStandaloneSubtitleMode(item.ItemMode)
+                    ? "Subtitrarea este deja curata. Nu schimb nimic aici."
+                    : "Exista deja subtitrarea finala. Nu schimb nimic aici."
+                : message);
+
+        if (action == "repair")
+            return ("ready", string.IsNullOrWhiteSpace(message)
+                ? "Repar subtitrarea in acelasi fisier si mut originalul in backup."
+                : message);
+
+        if (RequiresSubtitleSelection(item) && string.IsNullOrWhiteSpace(item.SelectedSubtitlePath))
             return ("warn", string.IsNullOrWhiteSpace(message) ? "Nu am gasit nicio subtitrare potrivita pentru acest episod." : message);
 
         if ((item.Candidates?.Count ?? 0) > 1 && !string.Equals(item.SelectionMode, "manual", StringComparison.OrdinalIgnoreCase))
@@ -1602,11 +1559,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private static bool CanRestoreItem(FixSummaryItem item)
     {
+        var hasNormalSourceRestore =
+            !string.IsNullOrWhiteSpace(item.SourceOriginalPath) &&
+            (!string.IsNullOrWhiteSpace(item.SourceBackupPath) || !string.IsNullOrWhiteSpace(item.BackupPath));
+        var hasOldTargetBackup = !string.IsNullOrWhiteSpace(item.ReplacedTargetBackupPath);
+        var canRemoveGeneratedOnlineTarget =
+            string.IsNullOrWhiteSpace(item.SourceOriginalPath) &&
+            !string.IsNullOrWhiteSpace(item.SourceBackupPath) &&
+            !string.IsNullOrWhiteSpace(item.TargetPath);
+
         return string.Equals(item.Status, "ok", StringComparison.OrdinalIgnoreCase)
                && !string.Equals(item.RestoreStatus, "restored", StringComparison.OrdinalIgnoreCase)
-               && (!string.IsNullOrWhiteSpace(item.SourceBackupPath)
-                   || !string.IsNullOrWhiteSpace(item.BackupPath)
-                   || !string.IsNullOrWhiteSpace(item.ReplacedTargetBackupPath));
+               && (hasNormalSourceRestore || hasOldTargetBackup || canRemoveGeneratedOnlineTarget);
     }
 
     private static async Task<List<RestoreOutcome>> RestoreSelectedItemsAsync(IReadOnlyList<FixSummaryItem> items, IProgress<RestoreProgress>? progress = null)
@@ -1629,6 +1593,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 var replacedTargetBackupPath = item.ReplacedTargetBackupPath;
                 var hasSourceBackup = !string.IsNullOrWhiteSpace(sourceBackupPath) && File.Exists(sourceBackupPath);
                 var hasReplacedTargetBackup = !string.IsNullOrWhiteSpace(replacedTargetBackupPath) && File.Exists(replacedTargetBackupPath);
+                var canRestoreSourceFile = hasSourceBackup && !string.IsNullOrWhiteSpace(sourceOriginalPath);
                 var steps = new List<string>();
                 var tempGeneratedTargetPath = string.Empty;
                 var restoredSource = false;
@@ -1636,17 +1601,19 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
                 try
                 {
-                    if (!string.IsNullOrWhiteSpace(sourceBackupPath) && !File.Exists(sourceBackupPath))
+                    if (!string.IsNullOrWhiteSpace(sourceBackupPath) &&
+                        !File.Exists(sourceBackupPath) &&
+                        !string.IsNullOrWhiteSpace(sourceOriginalPath))
+                    {
                         throw new FileNotFoundException("Lipseste subtitrarea sursa din backup.", sourceBackupPath);
+                    }
                     if (!string.IsNullOrWhiteSpace(replacedTargetBackupPath) && !File.Exists(replacedTargetBackupPath))
                         throw new FileNotFoundException("Lipseste varianta veche .ro.srt din backup.", replacedTargetBackupPath);
-                    if (!hasSourceBackup && !hasReplacedTargetBackup)
+                    if (!canRestoreSourceFile && !hasReplacedTargetBackup && (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(targetPath)))
                         throw new InvalidOperationException("Nu mai exista fisiere de backup disponibile pentru restaurare.");
 
-                    if (hasSourceBackup)
+                    if (canRestoreSourceFile)
                     {
-                        if (string.IsNullOrWhiteSpace(sourceOriginalPath))
-                            throw new InvalidOperationException("Lipseste calea originala a subtitrarii sursa.");
                         if (File.Exists(sourceOriginalPath))
                             throw new InvalidOperationException("Exista deja subtitrarea sursa in folder; nu o suprascriu automat.");
                     }
@@ -1660,7 +1627,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                         File.Move(targetPath, tempGeneratedTargetPath);
                     }
 
-                    if (hasSourceBackup && !string.IsNullOrWhiteSpace(sourceOriginalPath))
+                    if (canRestoreSourceFile && !string.IsNullOrWhiteSpace(sourceOriginalPath))
                     {
                         var sourceDir = Path.GetDirectoryName(sourceOriginalPath);
                         if (!string.IsNullOrWhiteSpace(sourceDir))
@@ -2017,6 +1984,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (!string.IsNullOrWhiteSpace(item.Episode))
             return item.Episode;
 
+        if (IsStandaloneSubtitleMode(item.ItemMode))
+            return "Subtitrare";
+
         return string.IsNullOrWhiteSpace(item.VideoName) ? "Folder" : "Fisier";
     }
 
@@ -2029,6 +1999,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             "create" => "Se creeaza",
             "overwrite" => "Se reface",
+            "repair" => "Se repara",
             "already-ok" => "Nu se schimba",
             _ => "Pregatit",
         },
@@ -2046,13 +2017,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         },
     };
 
-    private static string PlanActionLabel(string? action) => (action ?? string.Empty).Trim().ToLowerInvariant() switch
+    private static string PlanActionLabel(FixPlanItem item) => (item.Action ?? string.Empty).Trim().ToLowerInvariant() switch
     {
         "create" => "Creez subtitrarea finala si mut subtitrarea sursa in backup.",
         "overwrite" => "Refac subtitrarea finala si mut varianta veche in backup.",
+        "repair" => "Repar subtitrarea in acelasi fisier si mut originalul in backup.",
         "skip-existing" => "Las episodul asa. Daca vrei sa il refaci, lasa activa suprascrierea.",
-        "already-ok" => "Las episodul asa. Exista deja subtitrarea finala.",
-        _ => "Nu schimb nimic.",
+        "already-ok" => IsStandaloneSubtitleMode(item.ItemMode)
+            ? "Las subtitrarea asa. Fisierul este deja curat."
+            : "Las episodul asa. Exista deja subtitrarea finala.",
+        _ => IsStandaloneSubtitleMode(item.ItemMode)
+            ? "Nu schimb nimic la aceasta subtitrare."
+            : "Nu schimb nimic.",
     };
 
     private static string LastRunStatusLabel(FixSummaryItem item)
@@ -2079,6 +2055,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return TryBrush("SystemFillColorCriticalBrush", Media.Brushes.IndianRed);
         return StatusBrush((item.Status ?? string.Empty).Trim().ToLowerInvariant());
     }
+
+    private static bool IsStandaloneSubtitleMode(string? itemMode) =>
+        string.Equals(itemMode?.Trim(), "subtitle-only", StringComparison.OrdinalIgnoreCase);
 
     private static Media.Brush StatusBrush(string status) => status switch
     {

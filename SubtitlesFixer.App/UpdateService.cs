@@ -25,21 +25,20 @@ internal static class UpdateService
 
     public static async Task<PreparedUpdate?> CheckAndPrepareAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
-        settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
-        settings.Save();
-
         var manager = new UpdateManager(new GithubSource(RepositoryUrl, null, false));
         try
         {
             var updateInfo = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
             if (updateInfo is null)
             {
+                MarkSuccessfulCheck(settings);
                 Release(manager);
                 return null;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             await manager.DownloadUpdatesAsync(updateInfo).ConfigureAwait(false);
+            MarkSuccessfulCheck(settings);
 
             return new PreparedUpdate(manager, updateInfo, GetVersionLabel(updateInfo));
         }
@@ -54,6 +53,12 @@ internal static class UpdateService
     {
         var version = updateInfo.TargetFullRelease?.Version?.ToString();
         return string.IsNullOrWhiteSpace(version) ? "o versiune noua" : $"v{version}";
+    }
+
+    private static void MarkSuccessfulCheck(AppSettings settings)
+    {
+        settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+        settings.Save();
     }
 
     public static void Release(UpdateManager? manager)

@@ -789,10 +789,10 @@ public partial class SubtitleSearchWindow : Wpf.Ui.Controls.FluentWindow
         var backupDir = Path.Combine(targetDir, "backup");
         Directory.CreateDirectory(backupDir);
 
-        var sourceOriginalPath = CreateUniquePath(Path.Combine(
+        var syntheticSourcePath = CreateUniquePath(Path.Combine(
             targetDir,
             Path.GetFileNameWithoutExtension(item.VideoPath) + ".subdl-source.ro.srt"));
-        var sourceBackupPath = CreateUniquePath(Path.Combine(backupDir, Path.GetFileName(sourceOriginalPath)));
+        var sourceBackupPath = CreateUniquePath(Path.Combine(backupDir, Path.GetFileName(syntheticSourcePath)));
         var tempTargetPath = CreateSiblingTempPath(item.OutputPath, ".subdl-write");
         string? replacedTargetBackupPath = null;
         var utf8NoBom = new System.Text.UTF8Encoding(false);
@@ -817,7 +817,6 @@ public partial class SubtitleSearchWindow : Wpf.Ui.Controls.FluentWindow
             item.LastRunItem = BuildOnlineSummaryItem(
                 item,
                 downloaded,
-                sourceOriginalPath,
                 sourceBackupPath,
                 replacedTargetBackupPath);
 
@@ -892,7 +891,6 @@ public partial class SubtitleSearchWindow : Wpf.Ui.Controls.FluentWindow
     private static FixSummaryItem BuildOnlineSummaryItem(
         SearchItem item,
         SubtitleDownloadResult downloaded,
-        string sourceOriginalPath,
         string sourceBackupPath,
         string? replacedTargetBackupPath)
     {
@@ -904,11 +902,11 @@ public partial class SubtitleSearchWindow : Wpf.Ui.Controls.FluentWindow
             Episode = FormatEpisode(item.VideoInfo),
             VideoName = item.VideoName,
             VideoPath = item.VideoPath,
-            SubtitleBefore = downloaded.DownloadedFileName ?? Path.GetFileName(sourceOriginalPath),
+            SubtitleBefore = downloaded.DownloadedFileName ?? Path.GetFileName(sourceBackupPath),
             SubtitleAfter = Path.GetFileName(item.OutputPath),
             EncodingDetected = "SubDL + normalizare RO",
             BackupPath = sourceBackupPath,
-            SourceOriginalPath = sourceOriginalPath,
+            SourceOriginalPath = null,
             SourceBackupPath = sourceBackupPath,
             TargetPath = item.OutputPath,
             ReplacedTargetBackupPath = replacedTargetBackupPath,

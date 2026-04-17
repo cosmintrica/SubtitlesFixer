@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string[]]$Paths = @((Get-Location).Path),
   [switch]$Recurse = $true,
   [switch]$NoPause,
@@ -89,16 +89,42 @@ $script:RoDict = $null
 function Get-RoDictionary {
   if ($null -ne $script:RoDict) { return $script:RoDict }
   $scriptDir = if ($PSCommandPath) { Split-Path $PSCommandPath -Parent } else { (Get-Location).Path }
-  $dictPath = Join-Path $scriptDir "words_ro-RO.txt"
-  if (-not (Test-Path $dictPath)) {
+  $dictTxtPath = Join-Path $scriptDir "words_ro-RO.txt"
+  $dictGzipPath = Join-Path $scriptDir "words_ro.gz"
+  if (-not (Test-Path $dictTxtPath) -and -not (Test-Path $dictGzipPath)) {
     $script:RoDict = $false  # sentinel: dictionar indisponibil
     return $script:RoDict
   }
   $script:RoDict = [System.Collections.Generic.HashSet[string]]::new(
     [System.StringComparer]::OrdinalIgnoreCase)
-  foreach ($line in [System.IO.File]::ReadLines($dictPath, [System.Text.Encoding]::UTF8)) {
-    $trimmed = $line.Trim()
-    if ($trimmed.Length -gt 0) { [void]$script:RoDict.Add($trimmed) }
+
+  if (Test-Path $dictTxtPath) {
+    foreach ($line in [System.IO.File]::ReadLines($dictTxtPath, [System.Text.Encoding]::UTF8)) {
+      $trimmed = $line.Trim()
+      if ($trimmed.Length -gt 0) { [void]$script:RoDict.Add($trimmed) }
+    }
+    return $script:RoDict
+  }
+
+  $stream = $null
+  $gzip = $null
+  $reader = $null
+  try {
+    $stream = [System.IO.File]::OpenRead($dictGzipPath)
+    $gzip = New-Object System.IO.Compression.GZipStream($stream, [System.IO.Compression.CompressionMode]::Decompress)
+    $reader = New-Object System.IO.StreamReader($gzip, [System.Text.Encoding]::UTF8)
+    while (($line = $reader.ReadLine()) -ne $null) {
+      $trimmed = $line.Trim()
+      if ($trimmed.Length -gt 0) { [void]$script:RoDict.Add($trimmed) }
+    }
+  } finally {
+    if ($reader) {
+      $reader.Dispose()
+    } elseif ($gzip) {
+      $gzip.Dispose()
+    } elseif ($stream) {
+      $stream.Dispose()
+    }
   }
   return $script:RoDict
 }
@@ -575,7 +601,7 @@ function Normalize-RO {
     if ($markers.Count -eq 1 -and ($wordEnd - $wordStart) -eq 2 `
         -and (Test-IsBrokenMarker $chars[$wordStart]) -and $chars[$wordStart + 1] -eq 'i' `
         -and $wordStart -gt 0 -and $chars[$wordStart - 1] -eq '-') {
-      $chars[$wordStart] = if (Get-ShouldBeUpperCase $chars $wordStart) { [char]'Ț' } else { [char]'ț' }
+      $chars[$wordStart] = if (Get-ShouldBeUpperCase $chars $wordStart) { [char]0x021A } else { [char]0x021B }
       continue
     }
 
@@ -740,6 +766,12 @@ function Get-EpisodeTagsFromVideoName {
   }
   foreach ($m in [regex]::Matches($name, '(?i)S\d{2}E\d{2}')) {
     $v = $m.Value.ToUpperInvariant()
+    if (-not $list.Contains($v)) { [void]$list.Add($v) }
+  }
+  foreach ($m in [regex]::Matches($name, '(?i)(?<!\d)(\d{1,2})x(\d{1,2})(?!\d)')) {
+    $season = [int]$m.Groups[1].Value
+    $episode = [int]$m.Groups[2].Value
+    $v = ("S{0:D2}E{1:D2}" -f $season, $episode)
     if (-not $list.Contains($v)) { [void]$list.Add($v) }
   }
   return ,([string[]]$list.ToArray())
@@ -1011,6 +1043,203 @@ function Write-PreviewJson {
   [System.IO.File]::WriteAllText($PreviewJsonPath, $json, $utf8Bom)
 }
 
+function Test-ByteArraysEqual {
+  param([byte[]]$Left, [byte[]]$Right)
+
+  if ($null -eq $Left -or $null -eq $Right) { return $false }
+  if ($Left.Length -ne $Right.Length) { return $false }
+
+  for ($i = 0; $i -lt $Left.Length; $i++) {
+    if ($Left[$i] -ne $Right[$i]) { return $false }
+  }
+
+  return $true
+}
+
+function Get-StandaloneSubtitleMetadata {
+  param([System.IO.FileInfo]$Subtitle)
+
+  $episodeTags = Get-EpisodeTagsFromVideoName $Subtitle.Name
+  $numericEpisodeInfo = if ($episodeTags.Count -eq 0) { Get-NumericEpisodeInfoFromVideoName $Subtitle.Name } else { $null }
+  $episode = if ($episodeTags.Count -gt 0) { $episodeTags[0] } elseif ($numericEpisodeInfo) { [string]$numericEpisodeInfo.DisplayEpisode } else { "" }
+  $seasonKey = if ($episodeTags.Count -gt 0) { Get-SeasonKey $episode } elseif ($numericEpisodeInfo) { [string]$numericEpisodeInfo.SeasonKey } else { "Nesazonat" }
+
+  return [ordered]@{
+    Season = $seasonKey
+    Episode = $episode
+  }
+}
+
+function Get-StandaloneNormalizationResult {
+  param([string]$Path)
+
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  $res = Decode-Best $bytes
+  $fixed = Normalize-RO $res.Text
+  $normalizedBytes = $utf8NoBom.GetBytes($fixed)
+
+  return [ordered]@{
+    Changed = (-not (Test-ByteArraysEqual $bytes $normalizedBytes))
+    EncodingName = $res.Name
+    NormalizedText = $fixed
+  }
+}
+
+function Process-StandaloneSubtitle {
+  param(
+    [string]$Root,
+    [string]$BackupRoot,
+    [System.IO.FileInfo]$Subtitle,
+    [switch]$PreviewOnly
+  )
+
+  $meta = Get-StandaloneSubtitleMetadata $Subtitle
+  $seasonKey = [string]$meta.Season
+  $episode = [string]$meta.Episode
+
+  Write-Host "SUBTITRARE:"
+  Write-Host "  $($Subtitle.FullName)"
+
+  if ($PreviewOnly) {
+    try {
+      $analysis = Get-StandaloneNormalizationResult $Subtitle.FullName
+      if ($analysis.Changed) {
+        $previewAction = "repair"
+        $previewStatus = "ready"
+        $previewMessage = "Voi repara subtitrarea in acelasi fisier si voi muta originalul in backup."
+      } else {
+        $previewAction = "already-ok"
+        $previewStatus = "ready"
+        $previewMessage = "Subtitrarea este deja curata. Nu schimb nimic aici."
+      }
+
+      Add-PreviewItem ([ordered]@{
+          itemMode = "subtitle-only"
+          season = $seasonKey
+          episode = $episode
+          videoName = $Subtitle.Name
+          videoPath = $Subtitle.FullName
+          targetName = $Subtitle.Name
+          targetPath = $Subtitle.FullName
+          existingTarget = $true
+          selectedSubtitleName = ""
+          selectedSubtitlePath = ""
+          selectionMode = "none"
+          action = $previewAction
+          status = $previewStatus
+          message = $previewMessage
+          subtitleCount = 0
+          candidates = @()
+        })
+    } catch {
+      Add-PreviewItem ([ordered]@{
+          itemMode = "subtitle-only"
+          season = $seasonKey
+          episode = $episode
+          videoName = $Subtitle.Name
+          videoPath = $Subtitle.FullName
+          targetName = $Subtitle.Name
+          targetPath = $Subtitle.FullName
+          existingTarget = $true
+          selectedSubtitleName = ""
+          selectedSubtitlePath = ""
+          selectionMode = "none"
+          action = "none"
+          status = "error"
+          message = $_.Exception.Message
+          subtitleCount = 0
+          candidates = @()
+        })
+    }
+
+    return
+  }
+
+  try {
+    $analysis = Get-StandaloneNormalizationResult $Subtitle.FullName
+
+    if (-not $analysis.Changed) {
+      Write-Host "  [OK] Subtitrarea este deja curata." -ForegroundColor Green
+      $script:totalOk++
+      [void]$script:summaryItems.Add([ordered]@{
+          itemMode = "subtitle-only"
+          season = $seasonKey
+          episode = $episode
+          videoName = $Subtitle.Name
+          videoPath = $Subtitle.FullName
+          subtitleBefore = $Subtitle.Name
+          subtitleAfter = $Subtitle.Name
+          targetPath = $Subtitle.FullName
+          status = "ok"
+          message = "Subtitrarea era deja curata. Nu am schimbat nimic."
+        })
+      return
+    }
+
+    $sourceOriginalPath = $Subtitle.FullName
+    $subDir = Split-Path $Subtitle.FullName -Parent
+    $relDir = Get-RelDir -Base $Root -Dir $subDir
+    $bakDir = if ([string]::IsNullOrWhiteSpace($relDir)) { $BackupRoot } else { Join-Path $BackupRoot $relDir }
+    New-Item -ItemType Directory -Force -Path $bakDir -ErrorAction Stop | Out-Null
+
+    $bakPath = Join-Path $bakDir $Subtitle.Name
+    $bakPath = Ensure-UniquePath $bakPath
+
+    Write-Host "  -> Backup folder: $bakDir"
+    Move-Item -LiteralPath $Subtitle.FullName -Destination $bakPath -Force -ErrorAction Stop
+    Write-Host "  -> Mutat originalul in backup: $bakPath"
+
+    try {
+      [System.IO.File]::WriteAllText($sourceOriginalPath, [string]$analysis.NormalizedText, $utf8NoBom)
+    } catch {
+      if (Test-Path $sourceOriginalPath) {
+        Remove-Item -LiteralPath $sourceOriginalPath -Force -ErrorAction SilentlyContinue
+      }
+      if (Test-Path $bakPath) {
+        Move-Item -LiteralPath $bakPath -Destination $sourceOriginalPath -Force -ErrorAction Stop
+      }
+      throw
+    }
+
+    Write-Host "  -> Rescris in acelasi fisier: UTF-8 fara BOM (detectat: $($analysis.EncodingName))"
+    Write-Host "  [OK]" -ForegroundColor Green
+
+    $script:totalOk++
+    [void]$script:summaryItems.Add([ordered]@{
+        itemMode = "subtitle-only"
+        season = $seasonKey
+        episode = $episode
+        videoName = $Subtitle.Name
+        videoPath = $Subtitle.FullName
+        subtitleBefore = $Subtitle.Name
+        subtitleAfter = $Subtitle.Name
+        encodingDetected = $analysis.EncodingName
+        backupPath = $bakPath
+        sourceOriginalPath = $sourceOriginalPath
+        sourceBackupPath = $bakPath
+        targetPath = $sourceOriginalPath
+        status = "ok"
+        message = "Subtitrarea a fost reparata in acelasi fisier. Originalul a fost mutat in backup."
+      })
+  } catch {
+    $errorMessage = $_.Exception.Message
+    Write-Host "  [EROARE] $errorMessage" -ForegroundColor Red
+    $script:totalErr++
+    [void]$script:summaryItems.Add([ordered]@{
+        itemMode = "subtitle-only"
+        season = $seasonKey
+        episode = $episode
+        videoName = $Subtitle.Name
+        videoPath = $Subtitle.FullName
+        subtitleBefore = $Subtitle.Name
+        subtitleAfter = $Subtitle.Name
+        targetPath = $Subtitle.FullName
+        status = "error"
+        message = $errorMessage
+      })
+  }
+}
+
 foreach ($root in $Paths) {
   $rootInput = $root
   try {
@@ -1055,29 +1284,40 @@ foreach ($root in $Paths) {
   Write-Host "BACKUP: $backupRoot"
   Write-Host ""
 
-  $videos = Get-ChildItem -Path $root -File -Recurse:$Recurse -ErrorAction SilentlyContinue |
-    Where-Object {
-      $_.Extension -match '\.(mkv|mp4|avi)$' -and $_.FullName -notmatch '\\backup\\'
-    }
+  $videos = @(
+    Get-ChildItem -Path $root -File -Recurse:$Recurse -ErrorAction SilentlyContinue |
+      Where-Object {
+        $_.Extension -match '\.(mkv|mp4|avi)$' -and $_.FullName -notmatch '\\backup\\'
+      }
+  )
 
-  $subtitleFilesInRoot = @(
+  $allSubtitleFiles = @(
     Get-ChildItem -Path $root -File -Filter *.srt -Recurse:$Recurse -ErrorAction SilentlyContinue |
       Where-Object { $_.FullName -notmatch '\\backup\\' }
-  ).Count
+  )
+  $subtitleFilesInRoot = $allSubtitleFiles.Count
 
-  if (-not $videos) {
-    if ($subtitleFilesInRoot -gt 0) {
-      Write-Host "  [WARN] Nu am gasit video in acest root, dar exista $subtitleFilesInRoot subtitrari .srt." -ForegroundColor Yellow
-    } else {
-      Write-Host "  [WARN] Nu am gasit video in acest root." -ForegroundColor Yellow
+  $videoDirs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+  foreach ($videoFile in $videos) {
+    if (-not [string]::IsNullOrWhiteSpace($videoFile.DirectoryName)) {
+      [void]$videoDirs.Add($videoFile.DirectoryName)
     }
+  }
+
+  $standaloneSubs = @(
+    $allSubtitleFiles |
+      Where-Object {
+        [string]::IsNullOrWhiteSpace($_.DirectoryName) -or
+        -not $videoDirs.Contains($_.DirectoryName)
+      } |
+      Sort-Object FullName
+  )
+
+  if ($videos.Count -eq 0 -and $standaloneSubs.Count -eq 0) {
+    Write-Host "  [WARN] Nu am gasit nici video, nici subtitrari .srt in acest root." -ForegroundColor Yellow
     Write-Host ""
     $totalWarn++
-    $noVideoMessage = if ($subtitleFilesInRoot -gt 0) {
-      "Am gasit $subtitleFilesInRoot subtitrari .srt in acest folder, dar niciun fisier video (.mkv, .mp4, .avi). Daca vrei doar repararea subtitrarilor, foloseste butonul Repara subtitrari."
-    } else {
-      "Nu am gasit fisiere video (.mkv, .mp4, .avi) in acest folder."
-    }
+    $noVideoMessage = "Nu am gasit fisiere video (.mkv, .mp4, .avi) sau subtitrari .srt in acest folder."
     [void]$summaryItems.Add([ordered]@{
         season  = ""
         episode = ""
@@ -1101,15 +1341,23 @@ foreach ($root in $Paths) {
         action = "none"
         status = "warn"
         message = $noVideoMessage
-        subtitleCount = $subtitleFilesInRoot
+        subtitleCount = 0
         candidates = @()
       })
     continue
   }
 
-  $totalVideosInRoot = @($videos).Count
-  $processedVideosInRoot = 0
-  $groups = $videos | Group-Object DirectoryName
+  if ($videos.Count -eq 0 -and $standaloneSubs.Count -gt 0) {
+    Write-Host "  [INFO] Nu am gasit video in acest root. Repar subtitrarile direct in acelasi fisier." -ForegroundColor Cyan
+    Write-Host ""
+  } elseif ($standaloneSubs.Count -gt 0) {
+    Write-Host "  [INFO] Am gasit $($standaloneSubs.Count) subtitrari in foldere fara video. Le repar in acelasi fisier." -ForegroundColor Cyan
+    Write-Host ""
+  }
+
+  $totalWorkItemsInRoot = $videos.Count + $standaloneSubs.Count
+  $processedWorkItemsInRoot = 0
+  $groups = if ($videos.Count -gt 0) { $videos | Group-Object DirectoryName } else { @() }
 
   foreach ($g in $groups) {
     $dir = $g.Name
@@ -1131,8 +1379,8 @@ foreach ($root in $Paths) {
     }
 
     foreach ($video in $g.Group) {
-      $processedVideosInRoot++
-      Write-Host "__SF_PROGRESS__|$processedVideosInRoot|$totalVideosInRoot|$($video.Name)"
+      $processedWorkItemsInRoot++
+      Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
       Write-Host "-----------------------------------------"
       Write-Host "VIDEO:"
       Write-Host "  $($video.FullName)"
@@ -1496,6 +1744,14 @@ foreach ($root in $Paths) {
 
       Write-Host ""
     }
+  }
+
+  foreach ($standaloneSubtitle in $standaloneSubs) {
+    $processedWorkItemsInRoot++
+    Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($standaloneSubtitle.Name)"
+    Write-Host "-----------------------------------------"
+    Process-StandaloneSubtitle -Root $root -BackupRoot $backupRoot -Subtitle $standaloneSubtitle -PreviewOnly:$PreviewOnly
+    Write-Host ""
   }
 }
 
