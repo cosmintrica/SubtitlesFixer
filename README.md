@@ -16,8 +16,8 @@
 - **Drag & Drop** - Trage orice folder sau fisier direct in fereastra. Fara dialog, fara click-uri inutile.
 - **Backup Automat** - Subtitrarile originale si variantele vechi sunt mutate automat intr-un folder de backup. Nimic nu dispare.
 - **Analiza Ierarhica** - Grupeaza inteligent serialele si filmele si ofera un preview clar al tuturor schimbarilor inainte de procesare.
-- **Reparare Fara Video** - Butonul `Repara subtitrari` curata `.srt` direct din folder chiar daca nu exista fisier video pentru ele.
-- **Corectare Diacritice Gresite** - Detecteaza si repara automat ș↔ț, ă↔â↔î greșit plasate, verificand fiecare varianta in dictionar.
+- **Reparare Inteligentă Unificată** - Același pipeline de reparare (backup + detecție encoding + diacritice) funcționează acum și pentru fișierele `.srt` individuale, nu doar pentru cele legate de video.
+- **Corectare diacritice gresite** - Detectează și repară automat ș↔ț, ă↔â↔î greșit plasate, verificând fiecare variantă în dicționar.
 - **Restore Instant** - Revii oricand la starea initiala cu un singur click.
 - **Update Automat** - Versiunile instalate prin pachetul de release verifica GitHub Releases si pot instala update-ul automat.
 - **Design Modern** - Interfata Fluent UI cu Mica backdrop, animatii fluide si dark mode nativ.
@@ -35,7 +35,7 @@
 3. **Selecteaza** folderul (sau trage-l direct in fereastra).
 4. Apasa **Analiza** pentru a vedea exact ce se va schimba.
 5. Apasa **Ruleaza fix** - backup e facut, `.ro.srt` e scris, diacriticele sunt corecte.
-6. Daca ai doar fisiere `.srt` fara video, foloseste **Repara subtitrari** si aplicatia le repara in loc, pastrand backup.
+6. Dacă ai doar fișiere `.srt` fără video, aplicația le repară în loc (cu backup), păstrând numele original.
 
 ## Algoritmul de reparare
 
