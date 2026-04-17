@@ -49,4 +49,29 @@ public partial class App : System.Windows.Application
             MessageBoxImage.Warning);
     }
 
+    [STAThread]
+    private static void Main(string[] args)
+    {
+        try
+        {
+            VelopackApp.Build().Run();
+        }
+        catch (Exception ex)
+        {
+            // Ignore velopack init errors
+        }
+
+        try
+        {
+            var app = new App();
+            var window = new MainWindow();
+            app.MainWindow = window;
+            window.Show();
+            app.Run();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+    }
 }
