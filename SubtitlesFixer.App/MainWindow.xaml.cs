@@ -49,14 +49,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         Loaded += MainWindow_Loaded;
         Closed += (_, _) => UpdateService.Release(_preparedUpdate?.Manager);
 
-        // Footer version � read from assembly so it updates automatically
+        // Footer version - read from assembly so it updates automatically
         var assembly = typeof(MainWindow).Assembly;
         var infoAttr = (System.Reflection.AssemblyInformationalVersionAttribute?)System.Attribute.GetCustomAttribute(assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
         var version = infoAttr?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "?";
         // MSBuild / Velopack pot adauga un suffix +gitsha la InformationalVersion
         var plusIdx = version.IndexOf('+');
         if (plusIdx > 0) version = version[..plusIdx];
-        FooterVersionText.Text = $"Subtitles Fixer v{version} � Cosmin Trica";
+        FooterVersionText.Text = $"Subtitles Fixer v{version} · Cosmin Trica";
     }
 
     private void FolderPathBox_TextChanged(object sender, TextChangedEventArgs e)
