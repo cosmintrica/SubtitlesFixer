@@ -74,5 +74,21 @@ jobs:
             --token "${{ secrets.GITHUB_TOKEN }}" `
             --merge `
             --publish `
-            --releaseName "Subtitles Fixer ${{ steps.version.outputs.version }}" `
+            --releaseName "v${{ steps.version.outputs.version }}" `
             --tag "v${{ steps.version.outputs.version }}"
+
+      - name: Update release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "v$version"
+          $prevTag = git describe --tags --abbrev=0 "$tag^" 2>$null
+          if ($prevTag) {
+            $log = git log --pretty=format:"- %s" "$prevTag..$tag" -- | Out-String
+          } else {
+            $log = git log --pretty=format:"- %s" "$tag" -- | Out-String
+          }
+          $notes = "## Subtitles Fixer $tag`n`n### Commits:`n$($log.Trim())`n`n### Instalare:`n- **Setup**: Descarca ``CosminTrica.SubtitlesFixer-win-Setup.exe`` si instaleaza (cu update automat).`n- **Portable**: Descarca ``CosminTrica.SubtitlesFixer-win-Portable.zip`` si extrage oriunde."
+          gh release edit $tag --notes $notes
