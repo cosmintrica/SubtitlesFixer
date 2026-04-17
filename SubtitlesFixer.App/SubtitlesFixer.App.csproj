@@ -17,10 +17,10 @@
     <Company>Cosmin Trica</Company>
     <Authors>Cosmin Trica</Authors>
     <Description>Aplicatie desktop Windows pentru repararea, organizarea si restaurarea subtitrarilor .ro.srt.</Description>
-    <Version>1.0.5</Version>
-    <AssemblyVersion>1.0.5.0</AssemblyVersion>
-    <FileVersion>1.0.5.0</FileVersion>
-    <InformationalVersion>1.0.5</InformationalVersion>
+    <Version>1.0.6</Version>
+    <AssemblyVersion>1.0.6.0</AssemblyVersion>
+    <FileVersion>1.0.6.0</FileVersion>
+    <InformationalVersion>1.0.6</InformationalVersion>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <NeutralLanguage>ro</NeutralLanguage>
