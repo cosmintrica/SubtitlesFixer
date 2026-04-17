@@ -27,7 +27,10 @@
 
 ## Cum il folosesti
 
-1. **Descarca** ultima versiune de pe [Releases](https://github.com/cosmintrica/SubtitlesFixer/releases/latest).
+1. **Descarca** ultima versiune de pe [Releases](https://github.com/cosmintrica/SubtitlesFixer/releases/latest):
+   - **Setup** (`CosminTrica.SubtitlesFixer-win-Setup.exe`) - instaleaza aplicatia cu update automat.
+   - **Portable** (`CosminTrica.SubtitlesFixer-win-Portable.zip`) - extrage oriunde, fara instalare.
+   - Celelalte fisiere (`.nupkg`, `RELEASES`, `releases.win.json`) sunt interne - folosite de sistemul de auto-update.
 2. **Ruleaza** `SubtitlesFixer.exe`.
 3. **Selecteaza** folderul (sau trage-l direct in fereastra).
 4. Apasa **Analiza** pentru a vedea exact ce se va schimba.
