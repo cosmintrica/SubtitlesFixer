@@ -64,7 +64,7 @@ jobs:
             --token "${{ secrets.GITHUB_TOKEN }}"
 
           vpk pack `
-            --packId "CosminTrica.SubtitlesFixer" `
+            --packId "SubtitlesFixer" `
             --packVersion "${{ steps.version.outputs.version }}" `
             --packDir publish `
             --mainExe "SubtitlesFixer.exe"
@@ -90,5 +90,5 @@ jobs:
           } else {
             $log = git log --pretty=format:"- %s" "$tag" -- | Out-String
           }
-          $notes = "## Subtitles Fixer $tag`n`n### Commits:`n$($log.Trim())`n`n### Instalare:`n- **Setup**: Descarca ``CosminTrica.SubtitlesFixer-win-Setup.exe`` si instaleaza (cu update automat).`n- **Portable**: Descarca ``CosminTrica.SubtitlesFixer-win-Portable.zip`` si extrage oriunde."
+          $notes = "## Subtitles Fixer $tag`n`n### Commits:`n$($log.Trim())`n`n### Instalare:`n- **Setup**: Descarca ``SubtitlesFixer-win-Setup.exe`` si instaleaza (cu update automat).`n- **Portable**: Descarca ``SubtitlesFixer-win-Portable.zip`` si extrage oriunde."
           gh release edit $tag --notes $notes
