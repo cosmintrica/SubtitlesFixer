@@ -81,6 +81,454 @@ function Decode-Best {
   return @{ Text=$bestText; Name=$bestName }
 }
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Dictionar romanesc (~960K cuvinte) - lazy loaded din words_ro-RO.txt
+# ══════════════════════════════════════════════════════════════════════════════
+$script:RoDict = $null
+
+function Get-RoDictionary {
+  if ($null -ne $script:RoDict) { return $script:RoDict }
+  $scriptDir = if ($PSCommandPath) { Split-Path $PSCommandPath -Parent } else { (Get-Location).Path }
+  $dictPath = Join-Path $scriptDir "words_ro-RO.txt"
+  if (-not (Test-Path $dictPath)) {
+    $script:RoDict = $false  # sentinel: dictionar indisponibil
+    return $script:RoDict
+  }
+  $script:RoDict = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::OrdinalIgnoreCase)
+  foreach ($line in [System.IO.File]::ReadLines($dictPath, [System.Text.Encoding]::UTF8)) {
+    $trimmed = $line.Trim()
+    if ($trimmed.Length -gt 0) { [void]$script:RoDict.Add($trimmed) }
+  }
+  return $script:RoDict
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Date statice pentru normalizare (mutate la script scope pt helper functions)
+# ══════════════════════════════════════════════════════════════════════════════
+$script:loCandidates = @([char]0x0219, [char]0x021B, [char]0x0103, [char]0x00E2, [char]0x00EE)
+$script:upCandidates = @([char]0x0218, [char]0x021A, [char]0x0102, [char]0x00C2, [char]0x00CE)
+
+$script:bi = @{
+  # ---- ș + urmatorul ----
+  'șt'=100; 'și'=95; 'șe'=55; 'șa'=50; 'șu'=35; 'șo'=30; 'șc'=25; 'șn'=10
+  # ---- precedentul + ș ----
+  'eș'=70; 'aș'=65; 'uș'=60; 'oș'=35; 'iș'=25
+  # ---- ț + urmatorul ----
+  'ți'=100; 'ță'=85; 'ța'=80; 'țe'=55; 'țu'=65; 'țo'=10
+  # ---- precedentul + ț ----
+  'nț'=70; 'lț'=45; 'aț'=55; 'eț'=45; 'uț'=35; 'iț'=30; 'oț'=20; 'rț'=15
+  # ---- ă ----
+  'ăr'=40; 'ră'=40; 'ăt'=30; 'tă'=35; 'ăl'=30; 'lă'=30; 'ăm'=25; 'mă'=40
+  'ăi'=35; 'că'=45; 'să'=45; 'gă'=35; 'fă'=35; 'dă'=25; 'pă'=30; 'bă'=25
+  'ză'=35; 'jă'=25
+  # ---- â ----
+  'ân'=50; 'nâ'=15; 'âm'=30; 'ât'=70; 'câ'=40; 'tâ'=15; 'lâ'=10; 'râ'=25
+  # ---- î ----
+  'în'=60; 'îm'=30; 'îl'=25; 'îi'=30; 'îș'=15; 'ît'=20; 'nî'=5
+  # ---- extra ----
+  'ăț'=40; 'țâ'=25
+  'ău'=35; 'vă'=40; 'nă'=30
+}
+
+$script:triSet = [System.Collections.Generic.HashSet[string]]::new(
+  [System.StringComparer]::OrdinalIgnoreCase)
+@('ște','ști','ați','eți','iți','oți','uți',
+  'ție','ții','ția','țiu','țio','țel','țil',
+  'ănț','anț','enț','inț','unț','onț',
+  'ață','eță','oță','ăsc','esc','isc','șco') |
+  ForEach-Object { [void]$script:triSet.Add($_) }
+
+$script:shortWords = [System.Collections.Generic.HashSet[string]]::new(
+  [System.StringComparer]::OrdinalIgnoreCase)
+@('și','să','vă','mă','în','că','îți','ăla','ăia','ăsta','ăstea',
+  'niște','încă','până','câți','câte','câtă','câțiva',
+  # ți-words: ați, toți sunt ambigue cu ași, toși (ambele in dictionar!)
+  'ați','toți',
+  # ș-words (bigram scorer greseste spre ț)
+  'totuși','reușit','reușită','reușesc','leșin','leșinat','leșinată',
+  'ieșit','ieșire','greșit','greșeală','greșesc','cunoaște','cunoaștem',
+  'cunoștință','meșter',
+  # ț-words (fara trigram ar merge spre ș)
+  'puteți','faceți','mergeți','aveți','luați','dați','vreți',
+  'spuneți','vedeți','credeți','băieți','trăiți','iubiți','doriți',
+  # â-words (bigram scorer greseste spre ș/ț)
+  'atât','când','câteva','mâine','pâine','pământ','sfânt','câmp',
+  # ă/ș-words ambigue
+  'așa','rău','tău','său','grău',
+  # ș-words: bigram e?i/r?i favorizează ț greșit
+  'ieși','ieșind','sfârșit','sfârșitul','sfârșesc',
+  'uciși','ucis','detașament','detașamentele',
+  'înfricoșător','înfricoșătoare','înfricoșători',
+  'aceeași','aceleași','depășit','depășesc',
+  'așadar','făptași','însăși','însuși',
+  'obișnuit','obișnuiau','obișnuiesc','obișnuiți',
+  'lași','greșiți',
+  # ș-words: multi-? (cuvintele au 2+ marcaje)
+  'orașul','orașului','orășenesc',
+  'înșine','înșiși',
+  'păpuși','păpușă','păpușar',
+  'hârțogăraie','hârțogărie',
+  # ț la inceput de cuvant (ambigue cu ș: țara/șara, ține/șine)
+  'țara','țară','țării','țări','țărilor',
+  'ține','ținea','ținut','ținută') |
+  ForEach-Object { [void]$script:shortWords.Add($_) }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Helper functions pentru normalizare
+# ══════════════════════════════════════════════════════════════════════════════
+
+function Test-IsBrokenMarker {
+  param([char]$ch)
+  return ($ch -eq '?' -or $ch -eq [char]0xFFFD -or $ch -eq '`')
+}
+
+function Test-IsStartOfSentence {
+  param([char[]]$chars, [int]$pos)
+  for ($j = $pos - 1; $j -ge 0; $j--) {
+    $ch = $chars[$j]
+    if ($ch -eq ' ' -or $ch -eq "`t" -or $ch -eq "`r") { continue }
+    if ($ch -eq "`n") {
+      for ($k = $j - 1; $k -ge 0; $k--) {
+        $prev = $chars[$k]
+        if ($prev -eq ' ' -or $prev -eq "`t" -or $prev -eq "`r") { continue }
+        return ($prev -eq "`n" -or $prev -eq '>' -or [char]::IsDigit($prev) -or
+                $prev -eq '.' -or $prev -eq '!' -or $prev -eq '?')
+      }
+      return $true
+    }
+    return ($ch -eq '.' -or $ch -eq '!' -or $ch -eq '?')
+  }
+  return $true
+}
+
+function Get-ShouldBeUpperCase {
+  param([char[]]$chars, [int]$pos)
+  $hasLetterLeft  = ($pos -gt 0) -and [char]::IsLetter($chars[$pos-1])
+  $hasLetterRight = ($pos -lt $chars.Length-1) -and [char]::IsLetter($chars[$pos+1])
+  if (-not $hasLetterLeft) {
+    # Daca vecinul stang e un marker stricat, suntem in mijlocul cuvantului
+    if ($pos -gt 0 -and (Test-IsBrokenMarker $chars[$pos-1])) { return $false }
+    return ($hasLetterRight -and (Test-IsStartOfSentence $chars $pos))
+  }
+  return ($hasLetterLeft -and $hasLetterRight -and
+          [char]::IsUpper($chars[$pos-1]) -and [char]::IsUpper($chars[$pos+1]))
+}
+
+function Get-PenalizeImpossible {
+  param([char[]]$chars, [int]$pos, [char]$lower)
+  $penalty = 0
+  $hasLetterLeft  = ($pos -gt 0) -and [char]::IsLetter($chars[$pos-1])
+  $hasLetterRight = ($pos -lt $chars.Length-1) -and [char]::IsLetter($chars[$pos+1])
+
+  # ț urmat de consoana este extrem de rar
+  if ($lower -eq [char]0x021B -and $hasLetterRight) {
+    $r = [char]::ToLowerInvariant($chars[$pos+1])
+    if ($r -eq 't' -or $r -eq [char]0x021B -or $r -eq [char]0x0219) { $penalty -= 200 }
+    elseif (-not 'aăâeîiou'.Contains($r)) { $penalty -= 100 }
+  }
+  # ș urmat de ș sau ț e imposibil
+  if ($lower -eq [char]0x0219 -and $hasLetterRight) {
+    $r = [char]::ToLowerInvariant($chars[$pos+1])
+    if ($r -eq [char]0x0219 -or $r -eq [char]0x021B) { $penalty -= 200 }
+  }
+  # â nu apare la sfarsit de cuvant
+  if ($lower -eq [char]0x00E2 -and -not $hasLetterRight) { $penalty -= 50 }
+  # â nu apare la inceput de cuvant
+  if ($lower -eq [char]0x00E2 -and -not $hasLetterLeft) { $penalty -= 100 }
+  # î apare in principal la inceput de cuvant
+  if ($lower -eq [char]0x00EE -and $hasLetterLeft) { $penalty -= 40 }
+  # La inceput de cuvant: restrictii
+  if (-not $hasLetterLeft) {
+    # ț la inceput de cuvant + vocala e OK (țara, ține, țări)
+    # ț la inceput de cuvant + consoana e imposibil (țcoală)
+    if ($lower -eq [char]0x021B) {
+      if ($hasLetterRight -and -not 'aăâeîiou'.Contains([char]::ToLowerInvariant($chars[$pos+1]))) {
+        $penalty -= 200  # țcoală, țnui etc.
+      }
+    }
+    if ($lower -eq [char]0x0103) { $penalty -= 100 }  # ă la inceput
+  }
+  return $penalty
+}
+
+function Get-ScoreCandidate {
+  param([char[]]$chars, [int]$pos, [char]$candidate)
+  $score = 0
+  $lo = [char]::ToLowerInvariant($candidate)
+  $len = $chars.Length
+
+  # Bigram stanga
+  if ($pos -gt 0 -and [char]::IsLetter($chars[$pos-1])) {
+    $left = [char]::ToLowerInvariant($chars[$pos-1])
+    $bg = [string]::new(@($left, $lo))
+    if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+  } elseif ($pos -gt 0 -and (Test-IsBrokenMarker $chars[$pos-1])) {
+    $bestL = 0
+    foreach ($lc in $script:loCandidates) {
+      $bg = [string]::new(@($lc, $lo))
+      if ($script:bi.ContainsKey($bg) -and $script:bi[$bg] -gt $bestL) { $bestL = $script:bi[$bg] }
+    }
+    $score += $bestL
+  }
+
+  # Bigram dreapta
+  if ($pos -lt $len-1 -and [char]::IsLetter($chars[$pos+1])) {
+    $right = [char]::ToLowerInvariant($chars[$pos+1])
+    $bg = [string]::new(@($lo, $right))
+    if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+  } elseif ($pos -lt $len-1 -and (Test-IsBrokenMarker $chars[$pos+1])) {
+    $bestR = 0
+    foreach ($rc in $script:loCandidates) {
+      $bg = [string]::new(@($lo, $rc))
+      if ($script:bi.ContainsKey($bg) -and $script:bi[$bg] -gt $bestR) { $bestR = $script:bi[$bg] }
+    }
+    $score += $bestR
+  }
+
+  # Trigram bonus
+  if ($pos -gt 0 -and $pos -lt $len-1 -and
+      [char]::IsLetter($chars[$pos-1]) -and [char]::IsLetter($chars[$pos+1])) {
+    $tri = [string]::new(@(
+      [char]::ToLowerInvariant($chars[$pos-1]),
+      $lo,
+      [char]::ToLowerInvariant($chars[$pos+1])))
+    if ($script:triSet.Contains($tri)) { $score += 30 }
+  }
+
+  # Cuvant scurt bonus
+  $wStart = $pos
+  while ($wStart -gt 0 -and ([char]::IsLetter($chars[$wStart-1]) -or $chars[$wStart-1] -eq '?')) { $wStart-- }
+  $wEnd = $pos
+  while ($wEnd -lt $len-1 -and ([char]::IsLetter($chars[$wEnd+1]) -or $chars[$wEnd+1] -eq '?')) { $wEnd++ }
+  $wChars = [char[]]::new($wEnd - $wStart + 1)
+  for ($w = $wStart; $w -le $wEnd; $w++) {
+    $wChars[$w - $wStart] = if ($w -eq $pos) { $lo } else { [char]::ToLowerInvariant($chars[$w]) }
+  }
+  $word = [string]::new($wChars)
+  $wordMatch = $false
+  if ($word.Length -le 15) {
+    if ($script:shortWords.Contains($word)) {
+      $wordMatch = $true
+    } elseif ($word.IndexOf('?') -ge 0) {
+      $qPos = [System.Collections.Generic.List[int]]::new()
+      for ($p = 0; $p -lt $wChars.Length; $p++) {
+        if ($wChars[$p] -eq '?') { [void]$qPos.Add($p) }
+      }
+      $wc = $wChars.Clone()
+      if ($qPos.Count -eq 1) {
+        foreach ($cc in $script:loCandidates) {
+          $wc[$qPos[0]] = $cc
+          if ($script:shortWords.Contains([string]::new($wc))) { $wordMatch = $true; break }
+        }
+      } elseif ($qPos.Count -ge 2) {
+        :outerLoop foreach ($cc1 in $script:loCandidates) {
+          $wc[$qPos[0]] = $cc1
+          foreach ($cc2 in $script:loCandidates) {
+            $wc[$qPos[1]] = $cc2
+            if ($script:shortWords.Contains([string]::new($wc))) { $wordMatch = $true; break outerLoop }
+          }
+        }
+      }
+    }
+  }
+  if ($wordMatch) { $score += 200 }
+
+  # Penalizari combinatii imposibile
+  $score += Get-PenalizeImpossible $chars $pos $lo
+
+  return $score
+}
+
+# ── Reparare cu dictionar (word-level, ≤5 markeri) ────────────────────────
+function Invoke-TryDictionaryRepair {
+  param([char[]]$chars, [int]$wordStart, [int]$wordEnd,
+        [System.Collections.Generic.List[int]]$markers)
+
+  $dict = Get-RoDictionary
+  if ($dict -eq $false) { return $false }
+
+  $markerCount = $markers.Count
+
+  # Salveaza originalele
+  $saved = [char[]]::new($markerCount)
+  for ($k = 0; $k -lt $markerCount; $k++) { $saved[$k] = $chars[$markers[$k]] }
+
+  # Determina majuscula/minuscula
+  $isUpper = [bool[]]::new($markerCount)
+  for ($k = 0; $k -lt $markerCount; $k++) { $isUpper[$k] = Get-ShouldBeUpperCase $chars $markers[$k] }
+
+  # ── Branch B: inlocuieste TOTI markerii ──
+  $bestValues = $null
+  $bestScore = [int]::MinValue
+  $totalCombs = [int][Math]::Pow(5, $markerCount)
+
+  for ($comb = 0; $comb -lt $totalCombs; $comb++) {
+    $c = $comb
+    for ($k = 0; $k -lt $markerCount; $k++) {
+      $idx = $c % 5; $c = [Math]::Floor($c / 5)
+      $cands = if ($isUpper[$k]) { $script:upCandidates } else { $script:loCandidates }
+      $chars[$markers[$k]] = $cands[$idx]
+    }
+    $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
+    if (-not $dict.Contains($word)) { continue }
+
+    # Scor bigram ca tiebreaker + bonus dictionar
+    $score = 500
+    for ($k = 0; $k -lt $markerCount; $k++) {
+      $pos = $markers[$k]
+      if ($pos -gt 0 -and [char]::IsLetter($chars[$pos-1])) {
+        $bg = [string]::new(@([char]::ToLowerInvariant($chars[$pos-1]), [char]::ToLowerInvariant($chars[$pos])))
+        if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+      }
+      if ($pos -lt $chars.Length-1 -and [char]::IsLetter($chars[$pos+1])) {
+        $bg = [string]::new(@([char]::ToLowerInvariant($chars[$pos]), [char]::ToLowerInvariant($chars[$pos+1])))
+        if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+      }
+      # Trigram bonus (acelasi ca in BigramRepairFallback)
+      if ($pos -gt $wordStart -and $pos -lt ($wordEnd - 1) `
+          -and [char]::IsLetter($chars[$pos-1]) -and [char]::IsLetter($chars[$pos+1])) {
+        $tri = [string]::new(@([char]::ToLowerInvariant($chars[$pos-1]), [char]::ToLowerInvariant($chars[$pos]), [char]::ToLowerInvariant($chars[$pos+1])))
+        if ($script:triSet.Contains($tri)) { $score += 30 }
+      }
+      # Penalizare combinatii imposibile (fonotactica)
+      $score += (Get-PenalizeImpossible $chars $pos ([char]::ToLowerInvariant($chars[$pos])))
+    }
+    # Bonus pentru cuvinte scurte comune (și, să, că, așa, etc.)
+    if ($script:shortWords.Contains($word)) { $score += 200 }
+    if ($score -gt $bestScore) {
+      $bestScore = $score
+      $bestValues = [char[]]::new($markerCount)
+      for ($k = 0; $k -lt $markerCount; $k++) { $bestValues[$k] = $chars[$markers[$k]] }
+    }
+  }
+
+  # Restaureaza originalele
+  for ($k = 0; $k -lt $markerCount; $k++) { $chars[$markers[$k]] = $saved[$k] }
+
+  # ── Branch A: trailing ? sau ` → pastreaza ca punctuatie ──
+  $trailingBestValues = $null
+  $trailingBestScore = [int]::MinValue
+  $lastPos = $markers[$markerCount - 1]
+  $lastIsEnd = ($lastPos -eq $wordEnd - 1)
+  $lastMarkerChar = $saved[$markerCount - 1]
+
+  if ($lastIsEnd -and ($lastMarkerChar -eq '?' -or $lastMarkerChar -eq '`' -or $lastMarkerChar -eq [char]0xFFFD)) {
+    # Bonus mare: trailing ?/`/FFFD dupa un cuvant valid e aproape sigur
+    # semn de intrebare real sau apostrof corupt, nu diacritica
+    # (ă/â/î sunt reprezentabile in Windows-1250, deci nu ar fi inlocuite cu ?)
+    $trailingPunctuationBonus = 1000
+    if ($markerCount -eq 1) {
+      # Singurul marker e la sfarsit → verifica cuvantul fara el
+      $wordWithout = [string]::new($chars, $wordStart, $wordEnd - $wordStart - 1)
+      if ($dict.Contains($wordWithout)) { $trailingBestScore = $trailingPunctuationBonus }
+    } else {
+      # Mai multi markeri → repara pe toti in afara de ultimul
+      $subCount = $markerCount - 1
+      $subTotalCombs = [int][Math]::Pow(5, $subCount)
+      for ($comb = 0; $comb -lt $subTotalCombs; $comb++) {
+        $c = $comb
+        for ($k = 0; $k -lt $subCount; $k++) {
+          $idx = $c % 5; $c = [Math]::Floor($c / 5)
+          $cands = if ($isUpper[$k]) { $script:upCandidates } else { $script:loCandidates }
+          $chars[$markers[$k]] = $cands[$idx]
+        }
+        $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart - 1)
+        if (-not $dict.Contains($word)) { continue }
+
+        $score = 500
+        for ($k = 0; $k -lt $subCount; $k++) {
+          $pos = $markers[$k]
+          if ($pos -gt 0 -and [char]::IsLetter($chars[$pos-1])) {
+            $bg = [string]::new(@([char]::ToLowerInvariant($chars[$pos-1]), [char]::ToLowerInvariant($chars[$pos])))
+            if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+          }
+          if ($pos -lt $chars.Length-1 -and [char]::IsLetter($chars[$pos+1])) {
+            $bg = [string]::new(@([char]::ToLowerInvariant($chars[$pos]), [char]::ToLowerInvariant($chars[$pos+1])))
+            if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+          }
+        }
+        if ($score -gt $trailingBestScore) {
+          $trailingBestScore = $score
+          $trailingBestValues = [char[]]::new($subCount)
+          for ($k = 0; $k -lt $subCount; $k++) { $trailingBestValues[$k] = $chars[$markers[$k]] }
+        }
+      }
+      # Restaureaza sub-markers
+      for ($k = 0; $k -lt $subCount; $k++) { $chars[$markers[$k]] = $saved[$k] }
+      # Adauga bonus pentru trailing punctuation
+      if ($trailingBestScore -gt [int]::MinValue) {
+        $trailingBestScore += ($trailingPunctuationBonus - 500)
+      }
+    }
+  }
+
+  # Alege cel mai bun rezultat
+  if ($bestScore -ge $trailingBestScore -and $null -ne $bestValues) {
+    for ($k = 0; $k -lt $markerCount; $k++) { $chars[$markers[$k]] = $bestValues[$k] }
+    return $true
+  }
+  if ($trailingBestScore -gt [int]::MinValue) {
+    if ($null -ne $trailingBestValues) {
+      $subCount = $markerCount - 1
+      for ($k = 0; $k -lt $subCount; $k++) { $chars[$markers[$k]] = $trailingBestValues[$k] }
+    }
+    $chars[$lastPos] = if ($lastMarkerChar -eq '`' -or $lastMarkerChar -eq [char]0xFFFD) { [char]"'" } else { $lastMarkerChar }
+    return $true
+  }
+  return $false
+}
+
+# ── Fallback pe bigram scoring (per-caracter, multi-pass) ─────────────────
+function Invoke-BigramRepairFallback {
+  param([char[]]$chars, [int]$wordStart, [int]$wordEnd,
+        [System.Collections.Generic.List[int]]$markers)
+
+  $lastPos = $markers[$markers.Count - 1]
+  $lastIsEnd = ($lastPos -eq $wordEnd - 1)
+  $lastChar = $chars[$lastPos]
+
+  # ? la sfarsit de cuvant → semn de intrebare real
+  if ($lastIsEnd -and $lastChar -eq '?' -and $lastPos -gt $wordStart -and [char]::IsLetter($chars[$lastPos - 1])) {
+    $markers = [System.Collections.Generic.List[int]]::new($markers.GetRange(0, $markers.Count - 1))
+  }
+  # ` sau FFFD la sfarsit de cuvant → apostrof
+  elseif ($lastIsEnd -and ($lastChar -eq '`' -or $lastChar -eq [char]0xFFFD) -and $lastPos -gt $wordStart -and [char]::IsLetter($chars[$lastPos - 1])) {
+    $chars[$lastPos] = [char]"'"
+    $markers = [System.Collections.Generic.List[int]]::new($markers.GetRange(0, $markers.Count - 1))
+  }
+
+  if ($markers.Count -eq 0) { return }
+
+  # Multi-pass bigram repair
+  for ($pass = 0; $pass -lt 3; $pass++) {
+    $changed = $false
+    foreach ($pos in $markers) {
+      if (-not (Test-IsBrokenMarker $chars[$pos])) { continue }
+      $hasLeft  = ($pos -gt $wordStart) -and [char]::IsLetter($chars[$pos-1])
+      $hasRight = ($pos -lt $wordEnd-1) -and [char]::IsLetter($chars[$pos+1])
+      if (-not $hasLeft -and -not $hasRight) { continue }
+
+      $isUp = Get-ShouldBeUpperCase $chars $pos
+      $candidates = if ($isUp) { $script:upCandidates } else { $script:loCandidates }
+      $bestChar = [char]0
+      $bestScore = [int]::MinValue
+
+      foreach ($cand in $candidates) {
+        $score = Get-ScoreCandidate $chars $pos $cand
+        if ($score -gt $bestScore) { $bestScore = $score; $bestChar = $cand }
+      }
+
+      if ($bestScore -gt 0) { $chars[$pos] = $bestChar; $changed = $true }
+    }
+    if (-not $changed) { break }
+  }
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Normalize-RO  – CRLF → cedilla → dictionar+bigram repair → â→î → fix diacritice
+# ══════════════════════════════════════════════════════════════════════════════
+
 function Normalize-RO {
   param([string]$s)
   $s = $s -replace "`r?`n","`r`n" # CRLF
@@ -88,93 +536,166 @@ function Normalize-RO {
   $s = $s.Replace([string][char]0x015E, [string][char]0x0218)  # S-cedilla -> S-comma
   $s = $s.Replace([string][char]0x0163, [string][char]0x021B)  # t-cedilla -> t-comma
   $s = $s.Replace([string][char]0x0162, [string][char]0x021A)  # T-cedilla -> T-comma
-  
-  # Heuristic fix for broken hardcoded '?' instead of diacritics
-  # We use a list of pairs because PowerShell hash tables are case-insensitive by default
-  $qList = @(
-    @("ni\?te", "niște"), @("Ni\?te", "Niște"),
-    @("totu\?i", "totuși"), @("Totu\?i", "Totuși"),
-    @("a\?tept", "aștept"), @("A\?tept", "Aștept"),
-    @("a\?a", "așa"), @("A\?a", "Așa"),
-    @("a\?adar", "aşadar"), @("A\?adar", "Aşadar"),
-    @("ma\?ină", "maşină"), @("Ma\?ină", "Maşină"),
-    @("ve\?ti", "vești"), @("Ve\?ti", "Vești"),
-    @("cunoa\?te", "cunoaște"), @("Cunoa\?te", "Cunoaște"),
-    @("lini\?te", "liniște"), @("Lini\?te", "Liniște"),
-    @("poveste\?te", "povestește"), @("Poveste\?te", "Povestește"),
-    @("plăte\?te", "plătește"), @("Plăte\?te", "Plătește"),
-    @("vorbe\?te", "vorbește"), @("Vorbe\?te", "Vorbește"),
-    @("dore\?te", "dorește"), @("Dore\?te", "Dorește"),
-    @("prive\?te", "privește"), @("Prive\?te", "Privește"),
-    @("gre\?it", "greșit"), @("Gre\?it", "Greșit"),
-    @("gre\?eală", "greșeală"), @("Gre\?eală", "Greșeală"),
-    @("sfâr\?it", "sfârșit"), @("Sfâr\?it", "Sfârșit"),
-    @("lini\?tit", "liniștit"), @("Lini\?tit", "Liniștit"),
-    @("reu\?it", "reușit"), @("Reu\?it", "Reușit"),
-    @("u\?or", "ușor"), @("U\?or", "Ușor"),
-    @("ru\?ine", "rușine"), @("Ru\?ine", "Rușine"),
-    @("ro\?u", "roșu"), @("Ro\?u", "Roșu"),
-    @("mul\?umesc", "mulțumesc"), @("Mul\?umesc", "Mulțumesc"),
-    @("fa\?ă", "față"), @("Fa\?ă", "Față"),
-    @("via\?ă", "viață"), @("Via\?ă", "Viață"),
-    @("pu\?in", "puţin"), @("Pu\?in", "Puţin"),
-    @("le\?inat", "leșinat"), @("Le\?inat", "Leșinat"),
-    @("le\?ină", "leșină"), @("Le\?ină", "Leșină"),
-    @("le\?in", "leșin"), @("Le\?in", "Leșin"),
-    @("ie\?it", "ieșit"), @("Ie\?it", "Ieșit"),
-    @("ie\?ire", "ieșire"), @("Ie\?ire", "Ieșire"),
-    @("u\?ă", "ușă"), @("U\?ă", "Ușă"),
-    @("a\?ezat", "așezat"), @("A\?ezat", "Așezat"),
-    @("a\?eza", "așeza"), @("A\?eza", "Așeza"),
-    @("a\?ază", "așază"), @("A\?ază", "Așază"),
-    @("găse\?te", "găsește"), @("Găse\?te", "Găsește"),
-    @("găsi\?i", "găsiți"), @("Găsi\?i", "Găsiți"),
-    @("lipse\?te", "lipsește"), @("Lipse\?te", "Lipsește"),
-    @("sfâr\?ește", "sfârșește"), @("Sfâr\?ește", "Sfârșește"),
-    @("grăbe\?te", "grăbește"), @("Grăbe\?te", "Grăbește"),
-    @("hotără\?te", "hotărăște"), @("Hotără\?te", "Hotărăște"),
-    @("fere\?te", "ferește"), @("Fere\?te", "Ferește"),
-    @("de\?tept", "deștept"), @("De\?tept", "Deștept"),
-    @("de\?teaptă", "deșteaptă"), @("De\?teaptă", "Deșteaptă"),
-    @("mo\?tenire", "moștenire"), @("Mo\?tenire", "Moștenire"),
-    @("mo\?tenit", "moștenit"), @("Mo\?tenit", "Moștenit"),
-    @("gre\?esc", "greșesc"), @("Gre\?esc", "Greșesc"),
-    @("dore\?ti", "dorești"), @("Dore\?ti", "Dorești"),
-    @("vorbe\?ti", "vorbești"), @("Vorbe\?ti", "Vorbești"),
-    @("cite\?te", "citește"), @("Cite\?te", "Citește"),
-    @("sim\?i", "simți"), @("Sim\?i", "Simți"),
-    @("căr\?i", "cărți"), @("Căr\?i", "Cărți"),
-    @("părin\?i", "părinți"), @("Părin\?i", "Părinți"),
-    @("băie\?i", "băieți"), @("Băie\?i", "Băieți"),
-    @("băie\?el", "băiețel"), @("Băie\?el", "Băiețel"),
-    @("învă\?a", "învăța"), @("Învă\?a", "Învăța"),
-    @("fra\?i", "frați"), @("Fra\?i", "Frați"),
-    @("câ\?iva", "câțiva"), @("Câ\?iva", "Câțiva"),
-    @("spa\?iu", "spațiu"), @("Spa\?iu", "Spațiu"),
-    @("diminea\?a", "dimineața"), @("Diminea\?a", "Dimineața"),
-    @("bra\?e", "brațe"), @("Bra\?e", "Brațe"),
-    @("cu\?it", "cuțit"), @("Cu\?it", "Cuțit"),
-    @("poli\?ie", "poliţie"), @("Poli\?ie", "Poliţie"),
-    @("poli\?ia", "poliţia"), @("Poli\?ia", "Poliţia"),
-    @("aten\?ie", "atenţie"), @("Aten\?ie", "Atenţie"),
-    @("condi\?ii", "condiţii"), @("Condi\?ii", "Condiţii"),
-    @("situa\?ie", "situaţie"), @("Situa\?ie", "Situaţie"),
-    @("v-a\?i", "v-ați"), @("V-a\?i", "V-ați"),
-    @("l-a\?i", "l-ați"), @("L-a\?i", "L-ați"),
-    @("i-a\?i", "i-ați"), @("I-a\?i", "I-ați"),
-    @("ne-a\?i", "ne-ați"), @("Ne-a\?i", "Ne-ați"),
-    @("le-a\?i", "le-ați"), @("Le-a\?i", "Le-ați"),
-    @("te-a\?i", "te-ați"), @("Te-a\?i", "Te-ați"),
-    @("m-a\?i", "m-ați"), @("M-a\?i", "M-ați"),
-    @("n-a\?i", "n-ați"), @("N-a\?i", "N-ați"),
-    @("c-a\?i", "c-ați"), @("C-a\?i", "C-ați")
-  )
 
-  foreach ($pair in $qList) {
-    if ($s -cmatch $pair[0]) { $s = $s -creplace $pair[0], $pair[1] }
+  # --------------------------------------------------------------------------
+  # Pas 3: Reparare bazata pe dictionar + fallback bigram
+  #
+  # Algoritm:
+  # 1. Imparte textul in "cuvinte" (secvente de litere + markeri)
+  # 2. Pentru fiecare cuvant cu markeri (? / U+FFFD / `):
+  #    a. Daca ≤5 markeri: incearca toate combinatiile de candidati
+  #       si verifica dictionarul (~960K cuvinte romanesti)
+  #    b. Daca dictionarul nu gaseste nimic: fallback la bigram scoring
+  # --------------------------------------------------------------------------
+
+  $chars = $s.ToCharArray()
+  $len = $chars.Length
+  $i = 0
+
+  while ($i -lt $len) {
+    if (-not [char]::IsLetter($chars[$i]) -and -not (Test-IsBrokenMarker $chars[$i])) {
+      $i++
+      continue
+    }
+
+    # Gaseste limitele cuvantului (litere + markeri)
+    $wordStart = $i
+    while ($i -lt $len -and ([char]::IsLetter($chars[$i]) -or (Test-IsBrokenMarker $chars[$i]))) { $i++ }
+    $wordEnd = $i
+
+    # Colecteaza pozitiile markerilor
+    $markers = [System.Collections.Generic.List[int]]::new()
+    for ($j = $wordStart; $j -lt $wordEnd; $j++) {
+      if (Test-IsBrokenMarker $chars[$j]) { [void]$markers.Add($j) }
+    }
+    if ($markers.Count -eq 0) { continue }
+
+    # Regula context: ?i dupa cratima (-?i) → ți (pronume reflexiv/dativ)
+    # Exemple: Pune-ți, să-ți, fă-ți, Lasă-ți
+    if ($markers.Count -eq 1 -and ($wordEnd - $wordStart) -eq 2 `
+        -and (Test-IsBrokenMarker $chars[$wordStart]) -and $chars[$wordStart + 1] -eq 'i' `
+        -and $wordStart -gt 0 -and $chars[$wordStart - 1] -eq '-') {
+      $chars[$wordStart] = if (Get-ShouldBeUpperCase $chars $wordStart) { [char]'Ț' } else { [char]'ț' }
+      continue
+    }
+
+    # Incearca reparare cu dictionar (≤5 markeri)
+    if ($markers.Count -le 5 -and (Invoke-TryDictionaryRepair $chars $wordStart $wordEnd $markers)) {
+      continue
+    }
+
+    # Fallback: reparare per-caracter cu bigram scoring
+    Invoke-BigramRepairFallback $chars $wordStart $wordEnd $markers
   }
 
-  return $s
+  # Pas 4: â la inceput de cuvant → î (regula ortografica romana)
+  for ($i = 0; $i -lt $chars.Length; $i++) {
+    if ($chars[$i] -ne [char]0x00E2 -and $chars[$i] -ne [char]0x00C2) { continue }
+    if ($i -gt 0 -and [char]::IsLetter($chars[$i-1])) { continue }
+    $chars[$i] = if ($chars[$i] -eq [char]0x00E2) { [char]0x00EE } else { [char]0x00CE }
+  }
+
+  # --------------------------------------------------------------------------
+  # Pas 5: Corectare diacritice gresite cu dictionar
+  #
+  # Unele fisiere au diacritice valide dar incorecte (ex: ț in loc de ă).
+  # Pentru fiecare cuvant cu diacritice care NU exista in dictionar,
+  # incearca sa inlocuiasca diacriticele cu alternative.
+  # --------------------------------------------------------------------------
+  $dict = Get-RoDictionary
+  if ($dict -ne $false) {
+    $len = $chars.Length
+    $i = 0
+    while ($i -lt $len) {
+      if (-not [char]::IsLetter($chars[$i])) { $i++; continue }
+
+      # Gaseste limitele cuvantului
+      $wordStart = $i
+      while ($i -lt $len -and [char]::IsLetter($chars[$i])) { $i++ }
+      $wordEnd = $i
+
+      # Colecteaza pozitiile diacriticelor
+      $diacPositions = [System.Collections.Generic.List[int]]::new()
+      for ($j = $wordStart; $j -lt $wordEnd; $j++) {
+        $lo = [char]::ToLowerInvariant($chars[$j])
+        if ($lo -eq [char]0x0219 -or $lo -eq [char]0x021B -or $lo -eq [char]0x0103 -or
+            $lo -eq [char]0x00E2 -or $lo -eq [char]0x00EE) {
+          [void]$diacPositions.Add($j)
+        }
+      }
+      if ($diacPositions.Count -eq 0) { continue }
+
+      # Daca cuvantul e format DOAR din diacritice (ex: ăă, ă),
+      # e probabil o interjectie/filler — nu incerca sa o repari
+      if ($diacPositions.Count -eq ($wordEnd - $wordStart)) { continue }
+
+      # Cuvantul e deja corect?
+      $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
+      if ($dict.Contains($word)) { continue }
+
+      # Prea multe diacritice → skip (explozie combinatoriala)
+      if ($diacPositions.Count -gt 5) { continue }
+
+      # Salvare originale
+      $diacCount = $diacPositions.Count
+      $savedDiac = [char[]]::new($diacCount)
+      for ($k = 0; $k -lt $diacCount; $k++) { $savedDiac[$k] = $chars[$diacPositions[$k]] }
+
+      # Incearca toate combinatiile de diacritice alternative
+      $diacBestValues = $null
+      $diacBestScore = [int]::MinValue
+      $diacTotalCombs = [int][Math]::Pow(5, $diacCount)
+
+      for ($comb = 0; $comb -lt $diacTotalCombs; $comb++) {
+        $c = $comb
+        for ($k = 0; $k -lt $diacCount; $k++) {
+          $idx = $c % 5; $c = [Math]::Floor($c / 5)
+          $isUp = [char]::IsUpper($chars[$diacPositions[$k]])
+          $cands = if ($isUp) { $script:upCandidates } else { $script:loCandidates }
+          $chars[$diacPositions[$k]] = $cands[$idx]
+        }
+
+        $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
+        if (-not $dict.Contains($word)) { continue }
+
+        # Calculeaza scor bigram ca tiebreaker
+        $score = 0
+        for ($k = 0; $k -lt $diacCount; $k++) {
+          $pos = $diacPositions[$k]
+          $lo = [char]::ToLowerInvariant($chars[$pos])
+          if ($pos -gt $wordStart) {
+            $bg = [string]::new(@([char]::ToLowerInvariant($chars[$pos-1]), $lo))
+            if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+          }
+          if ($pos -lt $wordEnd - 1) {
+            $bg = [string]::new(@($lo, [char]::ToLowerInvariant($chars[$pos+1])))
+            if ($script:bi.ContainsKey($bg)) { $score += $script:bi[$bg] }
+          }
+        }
+        if ($score -gt $diacBestScore) {
+          $diacBestScore = $score
+          $diacBestValues = [char[]]::new($diacCount)
+          for ($k = 0; $k -lt $diacCount; $k++) { $diacBestValues[$k] = $chars[$diacPositions[$k]] }
+        }
+      }
+
+      # Restaureaza originalele
+      for ($k = 0; $k -lt $diacCount; $k++) { $chars[$diacPositions[$k]] = $savedDiac[$k] }
+
+      # Aplica corectia daca am gasit ceva diferit
+      if ($null -ne $diacBestValues) {
+        $different = $false
+        for ($k = 0; $k -lt $diacCount; $k++) {
+          if ($diacBestValues[$k] -ne $savedDiac[$k]) { $different = $true; break }
+        }
+        if ($different) {
+          for ($k = 0; $k -lt $diacCount; $k++) { $chars[$diacPositions[$k]] = $diacBestValues[$k] }
+        }
+      }
+    }
+  }
+
+  return [string]::new($chars)
 }
 
 function Ensure-UniquePath {
@@ -529,9 +1050,6 @@ foreach ($root in $Paths) {
   }
 
   $backupRoot = Join-Path $root "backup"
-  if (-not $PreviewOnly) {
-    New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
-  }
 
   Write-Host "ROOT:   $root"
   Write-Host "BACKUP: $backupRoot"
@@ -542,17 +1060,31 @@ foreach ($root in $Paths) {
       $_.Extension -match '\.(mkv|mp4|avi)$' -and $_.FullName -notmatch '\\backup\\'
     }
 
+  $subtitleFilesInRoot = @(
+    Get-ChildItem -Path $root -File -Filter *.srt -Recurse:$Recurse -ErrorAction SilentlyContinue |
+      Where-Object { $_.FullName -notmatch '\\backup\\' }
+  ).Count
+
   if (-not $videos) {
-    Write-Host "  [WARN] Nu am gasit video in acest root." -ForegroundColor Yellow
+    if ($subtitleFilesInRoot -gt 0) {
+      Write-Host "  [WARN] Nu am gasit video in acest root, dar exista $subtitleFilesInRoot subtitrari .srt." -ForegroundColor Yellow
+    } else {
+      Write-Host "  [WARN] Nu am gasit video in acest root." -ForegroundColor Yellow
+    }
     Write-Host ""
     $totalWarn++
+    $noVideoMessage = if ($subtitleFilesInRoot -gt 0) {
+      "Am gasit $subtitleFilesInRoot subtitrari .srt in acest folder, dar niciun fisier video (.mkv, .mp4, .avi). Daca vrei doar repararea subtitrarilor, foloseste butonul Repara subtitrari."
+    } else {
+      "Nu am gasit fisiere video (.mkv, .mp4, .avi) in acest folder."
+    }
     [void]$summaryItems.Add([ordered]@{
         season  = ""
         episode = ""
         videoName = ""
         videoPath = ""
         status  = "warn"
-        message = "Nu am gasit fisiere video (.mkv, .mp4, .avi) in acest folder."
+        message = $noVideoMessage
         rootPath = $root
       })
     Add-PreviewItem ([ordered]@{
@@ -568,7 +1100,8 @@ foreach ($root in $Paths) {
         selectionMode = "none"
         action = "none"
         status = "warn"
-        message = "Nu am gasit fisiere video (.mkv, .mp4, .avi) in acest folder."
+        message = $noVideoMessage
+        subtitleCount = $subtitleFilesInRoot
         candidates = @()
       })
     continue
@@ -647,6 +1180,7 @@ foreach ($root in $Paths) {
             action = "none"
             status = "warn"
             message = "Nu pot detecta pattern SxxEyy in numele fisierului video."
+            subtitleCount = 0
             candidates = @()
           })
         Write-Host ""
@@ -758,6 +1292,7 @@ foreach ($root in $Paths) {
             action = $previewAction
             status = $previewStatus
             message = $previewMessage
+            subtitleCount = $candidateDtos.Count
             candidates = $candidateDtos
           })
         Write-Host ""

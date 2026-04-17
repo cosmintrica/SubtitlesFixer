@@ -1,0 +1,78 @@
+name: Release Velopack
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content "SubtitlesFixer.App/SubtitlesFixer.App.csproj"
+          $version = $project.Project.PropertyGroup.Version | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Nu am putut citi <Version> din SubtitlesFixer.App.csproj."
+          }
+
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $expectedTag = "v$version"
+            if ("${{ github.ref_name }}" -ne $expectedTag) {
+              throw "Tag-ul ${{ github.ref_name }} nu corespunde versiunii din proiect ($expectedTag)."
+            }
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish application
+        shell: pwsh
+        run: |
+          dotnet publish "SubtitlesFixer.App/SubtitlesFixer.App.csproj" `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -o publish
+
+      - name: Build and upload Velopack release
+        shell: pwsh
+        run: |
+          dotnet tool install -g vpk --version 0.0.1298
+          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+
+          vpk download github `
+            --repoUrl "https://github.com/${{ github.repository }}" `
+            --token "${{ secrets.GITHUB_TOKEN }}"
+
+          vpk pack `
+            --packId "CosminTrica.SubtitlesFixer" `
+            --packVersion "${{ steps.version.outputs.version }}" `
+            --packDir publish `
+            --mainExe "SubtitlesFixer.exe"
+
+          vpk upload github `
+            --repoUrl "https://github.com/${{ github.repository }}" `
+            --token "${{ secrets.GITHUB_TOKEN }}" `
+            --merge `
+            --publish `
+            --releaseName "Subtitles Fixer ${{ steps.version.outputs.version }}" `
+            --tag "v${{ steps.version.outputs.version }}"

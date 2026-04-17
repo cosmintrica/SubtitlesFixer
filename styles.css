@@ -259,10 +259,27 @@ img.nav-icon {
   margin-top: 36px;
 }
 
+.hero-note {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(99,102,241,0.16);
+  background: rgba(99,102,241,0.08);
+  color: #d8d9ea;
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.hero-note strong {
+  color: #fff;
+}
+
 /* ─── App mockup ───────────────────────────────────────── */
 .hero-mockup {
   position: relative;
   z-index: 2;
+  align-self: center;
 }
 
 .mockup-window {
@@ -488,9 +505,15 @@ img.mockup-icon {
 }
 
 .float-sub-2 {
-  bottom: -60px;
-  left: -90px;
+  bottom: -40px;
+  left: -40px;
   animation-delay: -3s;
+}
+
+.float-sub-3 {
+  bottom: 50px;
+  right: -110px;
+  animation-delay: -4.5s;
 }
 
 @keyframes float-y {
@@ -541,7 +564,7 @@ img.mockup-icon {
 
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
 }
 
@@ -576,6 +599,108 @@ img.mockup-icon {
 }
 
 .feat p {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+/* ─── ALGORITHM SHOWCASE ───────────────────────────────── */
+.algorithm {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 80px 24px;
+}
+
+.algorithm h2 {
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+  max-width: 28ch;
+}
+
+.algo-sub {
+  color: var(--muted);
+  font-size: 1.1rem;
+  margin-bottom: 36px;
+  max-width: 55ch;
+}
+
+.algo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.algo-card {
+  padding: 28px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: border-color 200ms, transform 200ms;
+}
+
+.algo-card:hover {
+  border-color: rgba(99,102,241,0.2);
+  transform: translateY(-2px);
+}
+
+.algo-card-hero {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 32px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.12), transparent 60%),
+    var(--card);
+  border-color: rgba(99,102,241,0.15);
+}
+
+.algo-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(3rem, 6vw, 4.5rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.algo-card-hero h3 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.algo-card-hero p {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  max-width: 50ch;
+}
+
+.algo-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(99,102,241,0.1);
+  color: var(--accent2);
+  margin-bottom: 16px;
+}
+
+.algo-card h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.algo-card p {
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.65;
@@ -727,10 +852,19 @@ img.mockup-icon {
   .hero-mockup {
     max-width: 520px;
     margin: 0 auto;
+    margin-top: 0;
   }
 
   .feature-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .algo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .algo-card-hero {
+    grid-column: 1 / -1;
   }
 
   .float-sub { display: none; }
@@ -745,6 +879,10 @@ img.mockup-icon {
   }
 
   .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .algo-grid {
     grid-template-columns: 1fr;
   }
 
@@ -805,6 +943,31 @@ img.mockup-icon {
 
   .cta-inner {
     padding: 40px 24px;
+  }
+}
+
+@media (max-width: 560px) {
+  .mockup-chips {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .m-chip {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    gap: 4px;
+    padding: 5px 8px;
+    font-size: 0.64rem;
+    white-space: nowrap;
+  }
+
+  .m-chip b {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 7px;
+    font-size: 0.72rem;
   }
 }
 

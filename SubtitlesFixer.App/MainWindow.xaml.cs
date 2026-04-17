@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using Media = System.Windows.Media;
+using SubtitlesFixer.App.Subtitles;
 
 namespace SubtitlesFixer.App;
 
@@ -20,9 +21,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private FixPlanPayload? _currentPlan;
     private FixSummaryPayload? _lastRun;
+    private PreparedUpdate? _preparedUpdate;
     private string? _analyzedFolder;
     private bool _analyzedRecurse;
     private bool _analyzedOverwrite;
+    private bool _autoUpdateChecked;
     private bool _isBusy;
     private bool _uiReady;
     private string _workProgressLabel = string.Empty;
@@ -42,11 +45,44 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _uiReady = true;
         UpdatePlanHint();
         UpdateActionState();
+
+        Loaded += MainWindow_Loaded;
+        Closed += (_, _) => UpdateService.Release(_preparedUpdate?.Manager);
     }
 
     private void FolderPathBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         HandleInputsChanged();
+    }
+
+    private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            var paths = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+            if (paths is { Length: > 0 } && Directory.Exists(paths[0]))
+            {
+                e.Effects = System.Windows.DragDropEffects.Link;
+                e.Handled = true;
+                return;
+            }
+        }
+        e.Effects = System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
+            && e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths
+            && paths.Length > 0)
+        {
+            var target = paths[0];
+            if (File.Exists(target))
+                target = Path.GetDirectoryName(target) ?? target;
+            if (Directory.Exists(target))
+                FolderPathBox.Text = target;
+        }
     }
 
     private void OptionChanged(object sender, RoutedEventArgs e)
@@ -61,6 +97,78 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         UpdatePlanHint();
         UpdateActionState();
+    }
+
+    private void SearchOnlineButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Trece folderul curent ca sugestie in fereastra de cautare
+        var currentFolder = FolderPathBox.Text?.Trim();
+        var win = new SubtitleSearchWindow(_settings, currentFolder)
+        {
+            Owner = this,
+        };
+        win.ShowDialog();
+    }
+
+    internal void ReloadLastRunFromStore()
+    {
+        _lastRun = LastRunStore.Load();
+        PopulateLastRunView(_lastRun);
+        UpdateActionState();
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_autoUpdateChecked)
+            return;
+
+        _autoUpdateChecked = true;
+        await CheckForAutomaticUpdatesAsync().ConfigureAwait(true);
+    }
+
+    private async Task CheckForAutomaticUpdatesAsync()
+    {
+        if (!UpdateService.IsEligibleForAutomaticUpdates() || !UpdateService.ShouldCheckNow(_settings))
+            return;
+
+        var originalStatus = StatusTextBlock.Text;
+        try
+        {
+            if (!_isBusy)
+                StatusTextBlock.Text = "Verific update-uri...";
+
+            var preparedUpdate = await UpdateService.CheckAndPrepareAsync(_settings).ConfigureAwait(true);
+            if (preparedUpdate is null)
+            {
+                if (!_isBusy)
+                    StatusTextBlock.Text = originalStatus;
+                return;
+            }
+
+            _preparedUpdate = preparedUpdate;
+            if (!_isBusy)
+                StatusTextBlock.Text = $"{preparedUpdate.VersionLabel} este gata de instalare.";
+
+            var answer = System.Windows.MessageBox.Show(
+                $"Am descarcat {preparedUpdate.VersionLabel}. Vrei sa inchid aplicatia acum si sa instalez update-ul?",
+                "Update disponibil",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (answer == MessageBoxResult.Yes)
+            {
+                preparedUpdate.Manager.ApplyUpdatesAndRestart(preparedUpdate.UpdateInfo);
+                return;
+            }
+
+            AppendLogLine("[Update] " + preparedUpdate.VersionLabel + " este descarcat si poate fi instalat la urmatoarea pornire.");
+        }
+        catch (Exception ex)
+        {
+            AppendLogLine("[Update] Verificarea automata a fost sarita: " + ex.Message);
+            if (!_isBusy)
+                StatusTextBlock.Text = originalStatus;
+        }
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -151,6 +259,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 .ConfigureAwait(true);
 
             var payload = await ReadSummaryPayloadAsync(summaryPath).ConfigureAwait(true);
+            await PostProcessGeneratedSubtitlesAsync(payload).ConfigureAwait(true);
             InitializeLastRunSelectionState(payload);
             _lastRun = payload;
             LastRunStore.Save(payload);
@@ -180,6 +289,71 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             TryDeleteFile(summaryPath);
             TryDeleteFile(selectionPath);
+            EndWorkProgress();
+            SetBusyState(false);
+        }
+    }
+
+    private async void RepairOnlyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFolder(out var folder))
+            return;
+
+        SaveCurrentSettings(folder);
+
+        var recurse = RecurseCheckBox.IsChecked == true;
+
+        try
+        {
+            SetBusyState(true);
+            BeginWorkProgress("Repar");
+            StatusTextBlock.Text = "Repar subtitrari...";
+            AppendLogSection("REPARARE SUBTITRARI");
+
+            var payload = await StandaloneSubtitleRepairer.RepairFolderAsync(
+                    folder,
+                    recurse,
+                    new Progress<SubtitleRepairProgress>(progress =>
+                        UpdateWorkProgress(progress.Current, progress.Total, progress.Label)))
+                .ConfigureAwait(true);
+
+            if (payload.Items is not { Count: > 0 })
+            {
+                StatusTextBlock.Text = "Nu am gasit subtitrari.";
+                System.Windows.MessageBox.Show(
+                    "Nu am gasit niciun fisier .srt in folderul ales.",
+                    "Subtitles Fixer",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            InitializeLastRunSelectionState(payload);
+            _lastRun = payload;
+            LastRunStore.Save(payload);
+            PopulateLastRunView(_lastRun);
+            MainTabs.SelectedItem = LastRunTab;
+
+            foreach (var item in payload.Items)
+                AppendLogLine($"[Repair] {(string.Equals(item.Status, "error", StringComparison.OrdinalIgnoreCase) ? "Eroare" : "OK")}: {item.VideoName} - {item.Message}");
+
+            var changedCount = payload.Items.Count(i => !string.IsNullOrWhiteSpace(i.ReplacedTargetBackupPath));
+            StatusTextBlock.Text = changedCount > 0
+                ? $"Reparare terminata. Au fost actualizate {changedCount} subtitrari."
+                : "Reparare terminata. Nu a fost nevoie de nicio schimbare.";
+        }
+        catch (Exception ex)
+        {
+            AppendLogLine("[EROARE REPARARE] " + ex.Message);
+            StatusTextBlock.Text = "Eroare.";
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "Subtitles Fixer",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
             EndWorkProgress();
             SetBusyState(false);
         }
@@ -548,6 +722,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 2, 10, 8),
         });
+        header.Children.Add(MakeChip("Total", computed.Count, new Media.SolidColorBrush(Media.Color.FromRgb(0x6B, 0x72, 0x80))));
         header.Children.Add(MakeChip("Se schimba", pending, new Media.SolidColorBrush(Media.Color.FromRgb(0x39, 0x7A, 0xF6))));
         header.Children.Add(MakeChip("Nu se schimba", alreadyOk, TryBrush("SystemFillColorSuccessBrush", Media.Brushes.ForestGreen)));
         header.Children.Add(MakeChip("Alege manual", review, TryBrush("SystemFillColorCautionBrush", Media.Brushes.Goldenrod)));
@@ -705,6 +880,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 2, 10, 8),
         });
+        header.Children.Add(MakeChip("Total", payload.Items.Count, new Media.SolidColorBrush(Media.Color.FromRgb(0x6B, 0x72, 0x80))));
         header.Children.Add(MakeChip("OK", totals.Ok, TryBrush("SystemFillColorSuccessBrush", Media.Brushes.ForestGreen)));
         header.Children.Add(MakeChip("Atentie", totals.Warn, TryBrush("SystemFillColorCautionBrush", Media.Brushes.Goldenrod)));
         header.Children.Add(MakeChip("Eroare", totals.Err, TryBrush("SystemFillColorCriticalBrush", Media.Brushes.IndianRed)));
@@ -857,7 +1033,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         row1.Children.Add(new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(item.Episode) ? "-" : item.Episode,
+            Text = GetPlanCardLead(item),
             FontWeight = FontWeights.Bold,
             FontSize = 14,
             Margin = new Thickness(0, 0, 8, 0),
@@ -877,13 +1053,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (!string.IsNullOrWhiteSpace(item.TargetName))
             details.Children.Add(CreateDetailLine("Subtitrarea finala:", item.TargetName, emphasize: true));
 
+        var candidates = item.Candidates ?? new List<FixPlanCandidate>();
+        if (candidates.Count > 0)
+            details.Children.Add(CreateDetailLine("Subtitrari candidate:", candidates.Count.ToString(), emphasize: false));
+        else if (item.SubtitleCount > 0)
+            details.Children.Add(CreateDetailLine("Subtitrari .srt gasite aici:", item.SubtitleCount.ToString(), emphasize: false));
+
         details.Children.Add(CreateDetailLine(
             "Ce fac aici:",
             PlanActionLabel(item.Action),
             emphasize: false,
             margin: new Thickness(0, 0, 0, 6)));
 
-        var candidates = item.Candidates ?? new List<FixPlanCandidate>();
         if (candidates.Count > 1)
         {
             details.Children.Add(new TextBlock
@@ -1198,6 +1379,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             BrowseButton is null ||
             RecurseCheckBox is null ||
             OverwriteRoCheckBox is null ||
+            RepairOnlyButton is null ||
+            SearchOnlineButton is null ||
             SelectAllRestoreButton is null ||
             ClearRestoreSelectionButton is null ||
             RestoreSelectedButton is null)
@@ -1208,12 +1391,52 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var hasValidFolder = TryGetExistingFolder(FolderPathBox.Text, out _);
         AnalyzeButton.IsEnabled = !_isBusy && hasValidFolder;
         RunButton.IsEnabled = !_isBusy && hasValidFolder;
+        RepairOnlyButton.IsEnabled = !_isBusy && hasValidFolder;
+        SearchOnlineButton.IsEnabled = !_isBusy;
 
         var hasRestorableItems = _lastRun?.Items?.Any(CanRestoreItem) == true;
         var hasRestoreSelection = _lastRun?.Items?.Any(i => i.IsSelectedForRestore && CanRestoreItem(i)) == true;
         SelectAllRestoreButton.IsEnabled = !_isBusy && hasRestorableItems;
         ClearRestoreSelectionButton.IsEnabled = !_isBusy && hasRestoreSelection;
         RestoreSelectedButton.IsEnabled = !_isBusy && hasRestoreSelection;
+    }
+
+    private async Task PostProcessGeneratedSubtitlesAsync(FixSummaryPayload payload)
+    {
+        if (payload.Items is not { Count: > 0 })
+            return;
+
+        foreach (var item in payload.Items.Where(i =>
+                     string.Equals(i.Status, "ok", StringComparison.OrdinalIgnoreCase) &&
+                     !string.IsNullOrWhiteSpace(i.TargetPath) &&
+                     File.Exists(i.TargetPath)))
+        {
+            var changed = await NormalizeSubtitleFileInPlaceAsync(item.TargetPath!).ConfigureAwait(true);
+            if (!changed)
+                continue;
+
+            item.EncodingDetected = string.IsNullOrWhiteSpace(item.EncodingDetected)
+                ? "Normalizare suplimentara aplicata"
+                : item.EncodingDetected + " + normalizare suplimentara";
+            if (!string.IsNullOrWhiteSpace(item.Message))
+                item.Message += " Am reparat suplimentar caracterele stricate.";
+
+            AppendLogLine("[Normalizare suplimentara] " + Path.GetFileName(item.TargetPath));
+        }
+    }
+
+    private static async Task<bool> NormalizeSubtitleFileInPlaceAsync(string path)
+    {
+        var originalBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+        var decoded = SubtitleNormalizer.DecodeBytes(originalBytes);
+        var normalized = SubtitleNormalizer.Normalize(decoded);
+        var normalizedBytes = new UTF8Encoding(false).GetBytes(normalized);
+
+        if (originalBytes.AsSpan().SequenceEqual(normalizedBytes))
+            return false;
+
+        await File.WriteAllTextAsync(path, normalized, new UTF8Encoding(false)).ConfigureAwait(false);
+        return true;
     }
 
     private void SetBusyState(bool busy)
@@ -1787,6 +2010,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (string.Equals(item.Action, "already-ok", StringComparison.OrdinalIgnoreCase))
             return "already-ok";
         return "pending";
+    }
+
+    private static string GetPlanCardLead(FixPlanItem item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Episode))
+            return item.Episode;
+
+        return string.IsNullOrWhiteSpace(item.VideoName) ? "Folder" : "Fisier";
     }
 
     private static string PlanStatusLabel(FixPlanItem item, string status) => status switch

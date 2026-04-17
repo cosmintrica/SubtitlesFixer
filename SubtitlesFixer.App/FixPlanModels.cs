@@ -41,6 +41,7 @@ public sealed class FixPlanItem
     public string? Action { get; set; }
     public string? Status { get; set; }
     public string? Message { get; set; }
+    public int SubtitleCount { get; set; }
     public List<FixPlanCandidate>? Candidates { get; set; }
 }
 

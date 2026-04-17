@@ -12,7 +12,10 @@
                  MinWidth="1000"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
-                 WindowBackdropType="Mica">
+                 WindowBackdropType="Mica"
+                 AllowDrop="True"
+                 Drop="Window_Drop"
+                 DragOver="Window_DragOver">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -100,6 +103,22 @@
                                Appearance="Primary"
                                Content="Ruleaza fix"
                                Click="RunButton_Click" />
+                    <ui:Button x:Name="RepairOnlyButton"
+                               Margin="0,0,10,10"
+                               Appearance="Secondary"
+                               Content="Repara subtitrari"
+                               ToolTip="Repara .srt din folder chiar daca nu exista video. Pastreaza numele fisierului si muta originalul in backup."
+                               Click="RepairOnlyButton_Click" />
+                    <Separator Width="1"
+                               Height="20"
+                               Margin="0,2,16,10"
+                               VerticalAlignment="Center" />
+                    <ui:Button x:Name="SearchOnlineButton"
+                               Margin="0,0,16,10"
+                               Appearance="Secondary"
+                               Content="Cauta subtitrari online"
+                               ToolTip="Deschide cautarea online pentru episoadele sau filmele care nu au inca subtitrare finala"
+                               Click="SearchOnlineButton_Click" />
                     <TextBlock x:Name="StatusTextBlock"
                                Margin="0,2,0,10"
                                VerticalAlignment="Center"

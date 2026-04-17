@@ -1,6 +1,6 @@
 window.SubtitlesFixerConfig = {
   productName: "Subtitles Fixer",
-  version: "1.0.3",
+  version: "1.0.4",
   producer: "Cosmin Trica",
   copyright: "Copyright \u00A9 2026 Cosmin Trica. All rights reserved.",
   downloadUrl: "https://github.com/cosmintrica/SubtitlesFixer/releases/latest",

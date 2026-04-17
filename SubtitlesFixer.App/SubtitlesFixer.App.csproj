@@ -17,23 +17,33 @@
     <Company>Cosmin Trica</Company>
     <Authors>Cosmin Trica</Authors>
     <Description>Aplicatie desktop Windows pentru repararea, organizarea si restaurarea subtitrarilor .ro.srt.</Description>
-    <Version>1.0.3</Version>
-    <AssemblyVersion>1.0.3.0</AssemblyVersion>
-    <FileVersion>1.0.3.0</FileVersion>
-    <InformationalVersion>1.0.3</InformationalVersion>
+    <Version>1.0.4</Version>
+    <AssemblyVersion>1.0.4.0</AssemblyVersion>
+    <FileVersion>1.0.4.0</FileVersion>
+    <InformationalVersion>1.0.4</InformationalVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <NeutralLanguage>ro</NeutralLanguage>
     <Copyright>Copyright © 2026 Cosmin Trica. All rights reserved.</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
     <EmbeddedResource Include="..\fixsubs.ps1" Link="fixsubs.ps1" />
+    <EmbeddedResource Include="words_ro.gz" />
     <Content Include="..\fixsubs.ps1" Link="fixsubs.ps1">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 
+  <PropertyGroup>
+    <StartupObject>SubtitlesFixer.App.App</StartupObject>
+  </PropertyGroup>
+
   <ItemGroup>
+    <PackageReference Include="Velopack" Version="0.0.1298" />
     <PackageReference Include="WPF-UI" Version="4.2.0" />
   </ItemGroup>
 

@@ -27,6 +27,7 @@
       <span class="nav-title">Subtitles Fixer</span>
     </a>
     <div class="nav-links">
+      <a href="#algorithm">Algoritm</a>
       <a href="#features">Features</a>
       <a href="#how">Cum funcționează</a>
       <a id="nav-download" href="#" class="nav-cta">Download</a>
@@ -42,7 +43,7 @@
     <div class="hero-content">
       <p class="hero-badge">
         <span class="badge-dot"></span>
-        <span>v1.0.3 &middot; Windows 10/11 &middot; Gratis</span>
+        <span>v1.0.4 &middot; Windows 10/11 &middot; Gratis</span>
       </p>
 
       <h1>
@@ -57,7 +58,7 @@
       <div class="hero-actions">
         <a id="download-button" href="#" class="btn btn-primary btn-xl">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>Download <strong id="hero-version-text">v1.0.3</strong></span>
+          <span>Download <strong id="hero-version-text">v1.0.4</strong></span>
         </a>
         
         <div class="donate-container">
@@ -88,6 +89,7 @@
           </div>
         </div>
       </div>
+
     </div>
 
     <div class="hero-mockup" aria-hidden="true">
@@ -142,6 +144,77 @@
         <span class="sub-time">encoding: Win-1250 -> UTF-8</span>
         <span class="sub-text">&#x0219;&#x021B;&#x0103;&#x00EE;&#x00E2; &#x2713;</span>
       </div>
+      <div class="float-sub float-sub-3">
+        <span class="sub-time">?tiai c&#x0103; &#x2192; reparat</span>
+        <span class="sub-text">&#x0219;tiai c&#x0103; &#x2713;</span>
+      </div>
+    </div>
+
+    <p class="hero-note">
+      <strong>Noutăți în v1.0.4:</strong> algoritm avansat de reparare bazat pe dicționar de 960K cuvinte românești,
+      drag &amp; drop pentru foldere, reparare directă fișiere <code>.srt</code> fără video și update automat din GitHub Releases.
+    </p>
+  </section>
+
+  <section class="algorithm" id="algorithm">
+    <div class="section-label">Sub capotă</div>
+    <h2>Cel mai avansat algoritm de reparare<br>pentru subtitrări românești.</h2>
+    <p class="algo-sub">Nu e un simplu find &amp; replace. Este un pipeline de 5 pași care înțelege limba română.</p>
+
+    <div class="algo-grid">
+      <article class="algo-card algo-card-hero">
+        <div class="algo-number">960K</div>
+        <h3>Dicționar complet</h3>
+        <p>Generat din Hunspell <code>ro_RO</code> cu toate formele flexionare. Fiecare cuvânt reparat este verificat în dicționar - nu se ghicește.</p>
+      </article>
+
+      <article class="algo-card">
+        <div class="algo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <h3>Detecție encoding</h3>
+        <p>Win-1250, ISO-8859-2, CP852, UTF-8 BOM - scorul de încredere alege automat encoding-ul corect.</p>
+      </article>
+
+      <article class="algo-card">
+        <div class="algo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <h3>Reparare combinatorică</h3>
+        <p>Markerii <code>?</code> <code>�</code> <code>`</code> sunt înlocuiți cu toate combinațiile posibile de ș, ț, ă, â, î și validați în dicționar.</p>
+      </article>
+
+      <article class="algo-card">
+        <div class="algo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>Scoring bigram + trigram</h3>
+        <p>Când dicționarul nu decide singur, scorul statistic pe bigramele limbii române departajează candidații.</p>
+      </article>
+
+      <article class="algo-card">
+        <div class="algo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        </div>
+        <h3>Corectare diacritice greșite</h3>
+        <p>Pas 5 detectează și repară ș↔ț, ă↔â↔î greșit plasate, verificând fiecare variantă în dicționar.</p>
+      </article>
+
+      <article class="algo-card">
+        <div class="algo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </div>
+        <h3>Cedillă → virgulă</h3>
+        <p>Convertește automat ş/ţ (cedillă) în ș/ț (virgulă) - forma corectă conform standardului Unicode.</p>
+      </article>
+
+      <article class="algo-card">
+        <div class="algo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <h3>Zero pierderi de date</h3>
+        <p>Backup automat înainte de orice modificare. Restore cu un click. Nimic nu dispare vreodată.</p>
+      </article>
     </div>
   </section>
 
@@ -164,6 +237,14 @@
         </div>
         <h3>Redenumește .ro.srt</h3>
         <p>Fiecare episod primește subtitrarea cu numele corect, direct lângă video.</p>
+      </article>
+
+      <article class="feat">
+        <div class="feat-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <h3>Drag &amp; drop</h3>
+        <p>Trage orice folder sau fișier direct în fereastră. Fără dialog, fără click-uri inutile.</p>
       </article>
 
       <article class="feat">
@@ -197,6 +278,14 @@
         <h3>100% local</h3>
         <p>Totul rulează pe PC-ul tău. Fără cloud, fără cont, fără trackere.</p>
       </article>
+
+      <article class="feat">
+        <div class="feat-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2h2m5.66 0H14a2 2 0 012 2v3.34l1 1L23 7v10"/></svg>
+        </div>
+        <h3>Update automat</h3>
+        <p>Noi versiuni sunt instalate automat din GitHub Releases. Fără download manual.</p>
+      </article>
     </div>
   </section>
 
@@ -208,7 +297,7 @@
       <article class="step">
         <span class="step-n">1</span>
         <h3>Alegi folderul</h3>
-        <p>Selectezi folderul cu episoadele și subtitrările.</p>
+        <p>Trage folderul în fereastră sau selectează-l din dialog.</p>
       </article>
       <span class="step-arrow" aria-hidden="true">&rarr;</span>
       <article class="step">
@@ -232,7 +321,7 @@
       <div class="cta-actions">
         <a id="download-button-bottom" href="#" class="btn btn-primary btn-xl">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>Download <strong>v1.0.3</strong></span>
+          <span>Download <strong>v1.0.4</strong></span>
         </a>
         
         <div class="donate-container">
