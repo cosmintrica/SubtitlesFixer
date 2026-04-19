@@ -103,7 +103,7 @@ internal static partial class SubtitleNormalizer
     // ── Cuvinte scurte comune (bonus mare cand potriveste exact) ─────────
     private static readonly HashSet<string> CommonShortWords = new(StringComparer.OrdinalIgnoreCase)
     {
-        "și", "să", "vă", "mă", "în", "că", "îți", "ăla", "ăia", "ăsta", "ăstea",
+        "și", "să", "vă", "mă", "în", "că", "îți", "ți", "ăla", "ăia", "ăsta", "ăstea",
         "niște", "încă", "până", "câți", "câte", "câtă", "câțiva",
         // ți-words: ați, toți sunt ambigue cu ași, toși (ambele in dictionar!)
         "ați", "toți",
@@ -226,23 +226,100 @@ internal static partial class SubtitleNormalizer
             .Replace('\u0163', '\u021B')  // ţ → ț
             .Replace('\u0162', '\u021A'); // Ţ → Ț
 
+        // Pas 2.5: Nota muzicala ♪ pierduta la conversia in Win-1250 devine '?' izolat.
+        // Restauram ♪ inainte de repararea markerilor ca sa nu fie tratat ca diacritica.
+        s = FixMusicNotes(s);
+
+        // Nu pornim pasii grei de dictionar pe subtitrari deja curate.
+        // Daca dupa repararea notelor muzicale nu mai exista markeri stricati,
+        // evitam incarcarea lazy a dictionarului de ~960K cuvinte.
+        var hasBrokenMarkers = ContainsBrokenMarkers(s);
+
         // Pas 3: Repara fiecare ? / \uFFFD / ` ramas, folosind contextul local
-        s = RepairBrokenMarks(s);
+        if (hasBrokenMarkers)
+            s = RepairBrokenMarks(s);
 
         // Pas 4: â la inceput de cuvant → î (regula ortografica romana)
         s = FixWordStartCircumflex(s);
 
-        // Pas 5: Corectare diacritice gresite cu dictionar
-        // Unele fisiere au diacritice valide dar incorecte (ex: ț in loc de ă)
-        // Verifica fiecare cuvant cu diacritice in dictionar si incearca
-        // sa inlocuiasca diacriticele gresite.
-        s = FixWrongDiacriticsWithDictionary(s);
+        // Pas 5: Corectare diacritice gresite cu dictionar.
+        // Rulam doar daca au existat markeri stricati reali; altfel costul este mare
+        // iar pe subtitrari deja bune aduce prea putin beneficiu.
+        if (hasBrokenMarkers)
+            s = FixWrongDiacriticsWithDictionary(s);
+
+        // Pas 6: cosmetica de subtitle - fara trailing spaces si fara spatiu dupa
+        // marcajul de dialog de la inceputul liniei ("-Salut", nu "- Salut").
+        s = TrailingWhitespaceRx().Replace(s, string.Empty);
+        s = LeadingDialogueDashRx().Replace(s, "-");
 
         return s;
     }
 
     [GeneratedRegex(@"\r?\n")]
     private static partial Regex CrlfRx();
+
+    // Note muzicale pierdute: ? izolat la inceput/sfarsit de linie sau inconjurat de spatii.
+    // Cazurile acoperite (m = multiline pentru ^/$):
+    //   "? Text ..."        → "♪ Text ..."
+    //   "... Text ?"        → "... Text ♪"
+    //   "... ? ..."         doar daca pe aceeasi linie exista deja un ♪ (vezi FixMusicNotes).
+    [GeneratedRegex(@"(?m)^(\s*)\?(?=\s)")]
+    private static partial Regex MusicNoteLineStartRx();
+
+    [GeneratedRegex(@"(?m)(?<=\s)\?(\s*)$")]
+    private static partial Regex MusicNoteLineEndRx();
+
+    [GeneratedRegex(@"(?<=\s)\?(?=\s)")]
+    private static partial Regex MusicNoteMiddleRx();
+
+    [GeneratedRegex(@"[ \t]+(?=\r?\n|\z)")]
+    private static partial Regex TrailingWhitespaceRx();
+
+    [GeneratedRegex(@"(?m)^-\s+")]
+    private static partial Regex LeadingDialogueDashRx();
+
+    private static string FixMusicNotes(string s)
+    {
+        // Heuristica prudenta: transformam '?' izolat doar la marginile de linie
+        // (unde niciun cuvant romanesc nu are '?'). Apoi, daca linia contine deja
+        // '♪', transformam si '?'-urile din mijloc inconjurate de spatii.
+        s = MusicNoteLineStartRx().Replace(s, "$1♪");
+        s = MusicNoteLineEndRx().Replace(s, "♪$1");
+
+        if (!s.Contains('♪'))
+            return s;
+
+        // Pentru liniile care au deja ♪ (fie original, fie dupa pasul de mai sus),
+        // inlocuim si '?' izolat inconjurat de spatii.
+        var sb = new StringBuilder(s.Length);
+        int i = 0;
+        int len = s.Length;
+        while (i < len)
+        {
+            int lineEnd = s.IndexOf('\n', i);
+            if (lineEnd < 0) lineEnd = len;
+
+            var line = s.Substring(i, lineEnd - i);
+            if (line.Contains('♪') && line.Contains('?'))
+                line = MusicNoteMiddleRx().Replace(line, "♪");
+
+            sb.Append(line);
+            if (lineEnd < len)
+            {
+                sb.Append('\n');
+                i = lineEnd + 1;
+            }
+            else
+            {
+                break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static bool ContainsBrokenMarkers(string s) =>
+        s.IndexOf('?') >= 0 || s.IndexOf('\uFFFD') >= 0 || s.IndexOf('`') >= 0;
 
     // ────────────────────────────────────────────────────────────────────────
     // Pas 4: â la inceput de cuvant → î (regula ortografica romana)
@@ -276,6 +353,9 @@ internal static partial class SubtitleNormalizer
     // ────────────────────────────────────────────────────────────────────────
 
     private static readonly char[] AllDiacritics = ['ș', 'ț', 'ă', 'â', 'î', 'Ș', 'Ț', 'Ă', 'Â', 'Î'];
+
+    private static bool IsKnownRomanianWord(string word) =>
+        CommonShortWords.Contains(word) || RomanianDictionary.Contains(word);
 
     private static string FixWrongDiacriticsWithDictionary(string s)
     {
@@ -316,7 +396,7 @@ internal static partial class SubtitleNormalizer
 
             // Cuvantul e deja corect?
             var word = new string(chars, wordStart, wordEnd - wordStart);
-            if (RomanianDictionary.Contains(word))
+            if (IsKnownRomanianWord(word))
                 continue;
 
             // Prea multe diacritice → skip (combinatorial explosion)
@@ -381,7 +461,7 @@ internal static partial class SubtitleNormalizer
         if (idx >= diacPositions.Count)
         {
             var word = new string(chars, wordStart, wordEnd - wordStart);
-            if (!RomanianDictionary.Contains(word))
+            if (!IsKnownRomanianWord(word))
                 return;
 
             // Calculeaza scor bigram ca tiebreaker
@@ -462,6 +542,16 @@ internal static partial class SubtitleNormalizer
             if (markers.Count == 0)
                 continue;
 
+            // "asta???" si cazuri similare sunt punctuatie, nu litere lipsa.
+            // Daca avem numai '?' consecutive la finalul token-ului, le lasam intacte.
+            if (markers.Count >= 2 &&
+                markers[0] == wordEnd - markers.Count &&
+                markers.All(pos => chars[pos] == '?') &&
+                markers.Zip(markers.Skip(1), (a, b) => b == a + 1).All(x => x))
+            {
+                continue;
+            }
+
             // Regula context: ?i dupa cratima (-?i) → ți (pronume reflexiv/dativ)
             // Exemple: Pune-ți, să-ți, fă-ți, Lasă-ți, curăță-ți
             if (markers.Count == 1 && wordEnd - wordStart == 2
@@ -470,6 +560,27 @@ internal static partial class SubtitleNormalizer
             {
                 chars[wordStart] = ShouldBeUpperCase(chars, wordStart) ? 'Ț' : 'ț';
                 continue;
+            }
+
+            // Regula context: ?i- + auxiliar scurt → ți- (Nu ți-a / Cum ți-am / De ce ți-au)
+            if (markers.Count == 1 && wordEnd - wordStart == 2
+                && IsBrokenMarker(chars[wordStart]) && chars[wordStart + 1] == 'i'
+                && wordEnd < len && chars[wordEnd] == '-')
+            {
+                int suffixStart = wordEnd + 1;
+                int suffixEnd = suffixStart;
+                while (suffixEnd < len && char.IsLetter(chars[suffixEnd]))
+                    suffixEnd++;
+
+                var suffix = suffixEnd > suffixStart
+                    ? new string(chars, suffixStart, suffixEnd - suffixStart).ToLowerInvariant()
+                    : string.Empty;
+
+                if (suffix is "a" or "ai" or "am" or "ar" or "au")
+                {
+                    chars[wordStart] = ShouldBeUpperCase(chars, wordStart) ? 'Ț' : 'ț';
+                    continue;
+                }
             }
 
             // Incearca reparare cu dictionar (≤5 markeri)
@@ -520,20 +631,25 @@ internal static partial class SubtitleNormalizer
 
         if (lastIsEnd && lastMarkerChar is '?' or '`' or '\uFFFD')
         {
-            // Bonus mare: trailing ?/`/FFFD dupa un cuvant valid e aproape sigur
-            // semn de intrebare real sau apostrof corupt, nu diacritica
-            // (ă/â/î sunt reprezentabile in Windows-1250, deci nu ar fi inlocuite cu ?)
-            const int trailingPunctuationBonus = 1000;
-
             if (markers.Count == 1)
             {
+                // La un singur marker final vrem in continuare ca "pre?" / "ora?"
+                // sa poata deveni "preț" / "oraș", deci bonusul ramane sub scorul
+                // minim al variantei complete din dictionar.
+                const int singleMarkerTrailingPunctuationBonus = 450;
+
                 // Singurul marker e la sfarsit → verifica cuvantul fara el
                 var wordWithout = new string(chars, wordStart, wordEnd - wordStart - 1);
-                if (RomanianDictionary.Contains(wordWithout))
-                    trailingBestScore = trailingPunctuationBonus;
+                if (IsKnownRomanianWord(wordWithout))
+                    trailingBestScore = singleMarkerTrailingPunctuationBonus;
             }
             else
             {
+                // Pentru cuvinte cu 2+ markeri, daca tulpina reparata fara ultimul '?'
+                // exista in dictionar, preferam mai ferm semnul de intrebare real.
+                // Asta evita cazuri gen "le?inat?" -> "leșinată" in loc de "leșinat?".
+                const int multiMarkerTrailingPunctuationBonus = 750;
+
                 // Mai multi markeri → repara pe toti in afara de ultimul
                 var subMarkers = markers.GetRange(0, markers.Count - 1);
                 var subIsUpper = isUpper[..^1];
@@ -545,9 +661,9 @@ internal static partial class SubtitleNormalizer
                 for (int k = 0; k < subMarkers.Count; k++)
                     chars[subMarkers[k]] = saved[k];
 
-                // Adauga bonus pentru trailing punctuation
+                // Ajusteaza fata de baseline Branch B (500 din dict).
                 if (trailingBestScore > int.MinValue)
-                    trailingBestScore += trailingPunctuationBonus - 500;
+                    trailingBestScore += multiMarkerTrailingPunctuationBonus - 500;
             }
         }
 
@@ -590,7 +706,7 @@ internal static partial class SubtitleNormalizer
             // Toti markerii au fost inlocuiti - verifica dictionarul
             var word = new string(chars, wordStart, wordEnd - wordStart);
 
-            if (!RomanianDictionary.Contains(word))
+            if (!IsKnownRomanianWord(word))
                 return;
 
             // Calculeaza scor bigram ca tiebreaker

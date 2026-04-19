@@ -56,7 +56,7 @@ public partial class App : System.Windows.Application
         {
             VelopackApp.Build().Run();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Ignore velopack init errors
         }

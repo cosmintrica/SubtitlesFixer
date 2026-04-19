@@ -1,6 +1,6 @@
 ﻿param(
   [string[]]$Paths = @((Get-Location).Path),
-  [switch]$Recurse = $true,
+  [switch]$NoRecurse,
   [switch]$NoPause,
   [string]$SummaryJsonPath = "",
   [string]$PreviewJsonPath = "",
@@ -9,6 +9,8 @@
   [switch]$OverwriteRo = $false,
   [switch]$PreviewOnly
 )
+
+$Recurse = -not $NoRecurse
 
 Write-Host "========================================="
 Write-Host " FIX + RENAME SUBTITRARI (RECURSIV + BACKUP FOLDER)"
@@ -167,7 +169,7 @@ $script:triSet = [System.Collections.Generic.HashSet[string]]::new(
 
 $script:shortWords = [System.Collections.Generic.HashSet[string]]::new(
   [System.StringComparer]::OrdinalIgnoreCase)
-@('și','să','vă','mă','în','că','îți','ăla','ăia','ăsta','ăstea',
+@('și','să','vă','mă','în','că','îți','ți','ăla','ăia','ăsta','ăstea',
   'niște','încă','până','câți','câte','câtă','câțiva',
   # ți-words: ați, toți sunt ambigue cu ași, toși (ambele in dictionar!)
   'ați','toți',
@@ -191,10 +193,11 @@ $script:shortWords = [System.Collections.Generic.HashSet[string]]::new(
   'obișnuit','obișnuiau','obișnuiesc','obișnuiți',
   'lași','greșiți',
   # ș-words: multi-? (cuvintele au 2+ marcaje)
-  'orașul','orașului','orășenesc',
+  'oraș','orașe','orașul','orașului','orășenesc',
   'înșine','înșiși',
   'păpuși','păpușă','păpușar',
   'hârțogăraie','hârțogărie',
+  'preț','prețul','prețuri','prețurile',
   # ț la inceput de cuvant (ambigue cu ș: țara/șara, ține/șine)
   'țara','țară','țării','țări','țărilor',
   'ține','ținea','ținut','ținută') |
@@ -207,6 +210,12 @@ $script:shortWords = [System.Collections.Generic.HashSet[string]]::new(
 function Test-IsBrokenMarker {
   param([char]$ch)
   return ($ch -eq '?' -or $ch -eq [char]0xFFFD -or $ch -eq '`')
+}
+
+function Test-IsKnownRoWord {
+  param([string]$word)
+  $dict = Get-RoDictionary
+  return $script:shortWords.Contains($word) -or ($dict -and $dict.Contains($word))
 }
 
 function Test-IsStartOfSentence {
@@ -371,8 +380,7 @@ function Invoke-TryDictionaryRepair {
   param([char[]]$chars, [int]$wordStart, [int]$wordEnd,
         [System.Collections.Generic.List[int]]$markers)
 
-  $dict = Get-RoDictionary
-  if ($dict -eq $false) { return $false }
+  [void](Get-RoDictionary)
 
   $markerCount = $markers.Count
 
@@ -397,7 +405,7 @@ function Invoke-TryDictionaryRepair {
       $chars[$markers[$k]] = $cands[$idx]
     }
     $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
-    if (-not $dict.Contains($word)) { continue }
+    if (-not (Test-IsKnownRoWord $word)) { continue }
 
     # Scor bigram ca tiebreaker + bonus dictionar
     $score = 500
@@ -440,15 +448,21 @@ function Invoke-TryDictionaryRepair {
   $lastMarkerChar = $saved[$markerCount - 1]
 
   if ($lastIsEnd -and ($lastMarkerChar -eq '?' -or $lastMarkerChar -eq '`' -or $lastMarkerChar -eq [char]0xFFFD)) {
-    # Bonus mare: trailing ?/`/FFFD dupa un cuvant valid e aproape sigur
-    # semn de intrebare real sau apostrof corupt, nu diacritica
-    # (ă/â/î sunt reprezentabile in Windows-1250, deci nu ar fi inlocuite cu ?)
-    $trailingPunctuationBonus = 1000
     if ($markerCount -eq 1) {
+      # La un singur marker final vrem in continuare ca "pre?" / "ora?"
+      # sa poata deveni "preț" / "oraș", deci bonusul ramane sub scorul
+      # minim al variantei complete din dictionar.
+      $trailingPunctuationBonus = 450
+
       # Singurul marker e la sfarsit → verifica cuvantul fara el
       $wordWithout = [string]::new($chars, $wordStart, $wordEnd - $wordStart - 1)
-      if ($dict.Contains($wordWithout)) { $trailingBestScore = $trailingPunctuationBonus }
+      if (Test-IsKnownRoWord $wordWithout) { $trailingBestScore = $trailingPunctuationBonus }
     } else {
+      # Pentru cuvinte cu 2+ markeri, daca tulpina reparata fara ultimul '?'
+      # exista in dictionar, preferam mai ferm semnul de intrebare real.
+      # Asta evita cazuri gen "le?inat?" -> "leșinată" in loc de "leșinat?".
+      $trailingPunctuationBonus = 750
+
       # Mai multi markeri → repara pe toti in afara de ultimul
       $subCount = $markerCount - 1
       $subTotalCombs = [int][Math]::Pow(5, $subCount)
@@ -460,7 +474,7 @@ function Invoke-TryDictionaryRepair {
           $chars[$markers[$k]] = $cands[$idx]
         }
         $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart - 1)
-        if (-not $dict.Contains($word)) { continue }
+        if (-not (Test-IsKnownRoWord $word)) { continue }
 
         $score = 500
         for ($k = 0; $k -lt $subCount; $k++) {
@@ -482,7 +496,7 @@ function Invoke-TryDictionaryRepair {
       }
       # Restaureaza sub-markers
       for ($k = 0; $k -lt $subCount; $k++) { $chars[$markers[$k]] = $saved[$k] }
-      # Adauga bonus pentru trailing punctuation
+      # Ajusteaza fata de baseline-ul Branch B (500 din dictionar).
       if ($trailingBestScore -gt [int]::MinValue) {
         $trailingBestScore += ($trailingPunctuationBonus - 500)
       }
@@ -551,8 +565,74 @@ function Invoke-BigramRepairFallback {
   }
 }
 
+function Fix-MusicNotes {
+  param([string]$s)
+
+  $music = [string][char]0x266A
+  $s = [regex]::Replace($s, '(?m)^(\s*)\?(?=\s)', ('$1' + $music))
+  $s = [regex]::Replace($s, '(?m)(?<=\s)\?(\s*)$', ($music + '$1'))
+
+  if (-not $s.Contains($music)) { return $s }
+
+  $lines = $s -split "`r`n", -1
+  for ($i = 0; $i -lt $lines.Length; $i++) {
+    if ($lines[$i].Contains($music) -and $lines[$i].Contains('?')) {
+      $lines[$i] = [regex]::Replace($lines[$i], '(?<=\s)\?(?=\s)', $music)
+    }
+  }
+
+  return ($lines -join "`r`n")
+}
+
+function Test-ContainsBrokenMarkers {
+  param([string]$s)
+  return ($s.IndexOf('?') -ge 0 -or $s.IndexOf([char]0xFFFD) -ge 0 -or $s.IndexOf('`') -ge 0)
+}
+
+function Test-StandaloneNeedsNormalization {
+  param([string]$s)
+
+  if (Test-ContainsBrokenMarkers $s) { return $true }
+
+  if ($s.IndexOf([char]0x015F) -ge 0 -or $s.IndexOf([char]0x015E) -ge 0 -or
+      $s.IndexOf([char]0x0163) -ge 0 -or $s.IndexOf([char]0x0162) -ge 0) {
+    return $true
+  }
+
+  if ([regex]::IsMatch($s, '(?<!\r)\n')) { return $true }              # LF-only
+  if ([regex]::IsMatch($s, '\r(?!\n)')) { return $true }               # CR-only
+  if ([regex]::IsMatch($s, '[ \t]+(?=\r?\n|\z)')) { return $true }     # trailing spaces
+  if ([regex]::IsMatch($s, '(?<!\p{L})[âÂ]')) { return $true }          # â la inceput de cuvant
+
+  return $false
+}
+
+function Set-TokenChars {
+  param([char[]]$chars, [int]$wordStart, [string]$token)
+  for ($k = 0; $k -lt $token.Length; $k++) {
+    $chars[$wordStart + $k] = $token[$k]
+  }
+}
+
+function Get-RepairTokenCacheKey {
+  param([char[]]$chars, [int]$wordStart, [int]$wordEnd,
+        [System.Collections.Generic.List[int]]$markers)
+
+  $token = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
+  $profile = [System.Text.StringBuilder]::new()
+  foreach ($pos in $markers) {
+    if (Get-ShouldBeUpperCase $chars $pos) {
+      [void]$profile.Append('1')
+    } else {
+      [void]$profile.Append('0')
+    }
+  }
+
+  return ($token + '|' + $profile.ToString())
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
-# Normalize-RO  – CRLF → cedilla → dictionar+bigram repair → â→î → fix diacritice
+# Normalize-RO  – CRLF → cedilla → note muzicale → dictionar+bigram repair → â→î → fix diacritice
 # ══════════════════════════════════════════════════════════════════════════════
 
 function Normalize-RO {
@@ -562,6 +642,8 @@ function Normalize-RO {
   $s = $s.Replace([string][char]0x015E, [string][char]0x0218)  # S-cedilla -> S-comma
   $s = $s.Replace([string][char]0x0163, [string][char]0x021B)  # t-cedilla -> t-comma
   $s = $s.Replace([string][char]0x0162, [string][char]0x021A)  # T-cedilla -> T-comma
+  $s = Fix-MusicNotes $s
+  $hasBrokenMarkers = Test-ContainsBrokenMarkers $s
 
   # --------------------------------------------------------------------------
   # Pas 3: Reparare bazata pe dictionar + fallback bigram
@@ -575,43 +657,106 @@ function Normalize-RO {
   # --------------------------------------------------------------------------
 
   $chars = $s.ToCharArray()
-  $len = $chars.Length
-  $i = 0
+  if ($hasBrokenMarkers) {
+    $repairTokenCache = @{}
+    $len = $chars.Length
+    $i = 0
 
-  while ($i -lt $len) {
-    if (-not [char]::IsLetter($chars[$i]) -and -not (Test-IsBrokenMarker $chars[$i])) {
-      $i++
-      continue
+    while ($i -lt $len) {
+      if (-not [char]::IsLetter($chars[$i]) -and -not (Test-IsBrokenMarker $chars[$i])) {
+        $i++
+        continue
+      }
+
+      # Gaseste limitele cuvantului (litere + markeri)
+      $wordStart = $i
+      while ($i -lt $len -and ([char]::IsLetter($chars[$i]) -or (Test-IsBrokenMarker $chars[$i]))) { $i++ }
+      $wordEnd = $i
+
+      # Colecteaza pozitiile markerilor
+      $markers = [System.Collections.Generic.List[int]]::new()
+      for ($j = $wordStart; $j -lt $wordEnd; $j++) {
+        if (Test-IsBrokenMarker $chars[$j]) { [void]$markers.Add($j) }
+      }
+      if ($markers.Count -eq 0) { continue }
+
+      $tokenLength = $wordEnd - $wordStart
+      $originalToken = [string]::new($chars, $wordStart, $tokenLength)
+      $cacheKey = Get-RepairTokenCacheKey $chars $wordStart $wordEnd $markers
+      if ($repairTokenCache.ContainsKey($cacheKey)) {
+        $cachedToken = [string]$repairTokenCache[$cacheKey]
+        if ($cachedToken.Length -eq $tokenLength -and $cachedToken -ne $originalToken) {
+          Set-TokenChars $chars $wordStart $cachedToken
+        }
+        continue
+      }
+
+      # "asta???" si cazuri similare sunt punctuatie, nu litere lipsa.
+      # Daca avem numai '?' consecutive la finalul token-ului, le lasam intacte.
+      if ($markers.Count -ge 2) {
+        $allTrailingQuestions = ($markers[0] -eq ($wordEnd - $markers.Count))
+        if ($allTrailingQuestions) {
+          for ($m = 0; $m -lt $markers.Count; $m++) {
+            if ($chars[$markers[$m]] -ne '?' -or ($m -gt 0 -and $markers[$m] -ne ($markers[$m - 1] + 1))) {
+              $allTrailingQuestions = $false
+              break
+            }
+          }
+        }
+        if ($allTrailingQuestions) {
+          $repairTokenCache[$cacheKey] = $originalToken
+          continue
+        }
+      }
+
+      # "A?" si alte interjectii ultra-scurte trebuie lasate ca intrebare.
+      if ($markers.Count -eq 1 -and $tokenLength -eq 2 `
+          -and [char]::IsLetter($chars[$wordStart]) -and $chars[$wordEnd - 1] -eq '?') {
+        $repairTokenCache[$cacheKey] = $originalToken
+        continue
+      }
+
+      # Regula context: ?i dupa cratima (-?i) → ți (pronume reflexiv/dativ)
+      # Exemple: Pune-ți, să-ți, fă-ți, Lasă-ți
+      if ($markers.Count -eq 1 -and $tokenLength -eq 2 `
+          -and (Test-IsBrokenMarker $chars[$wordStart]) -and $chars[$wordStart + 1] -eq 'i' `
+            -and $wordStart -gt 0 -and $chars[$wordStart - 1] -eq '-') {
+        $chars[$wordStart] = if (Get-ShouldBeUpperCase $chars $wordStart) { [char]0x021A } else { [char]0x021B }
+        $repairTokenCache[$cacheKey] = [string]::new($chars, $wordStart, $tokenLength)
+        continue
+      }
+
+      # Regula context: ?i- + auxiliar scurt → ți- (Nu ți-a / Cum ți-am / De ce ți-au)
+      if ($markers.Count -eq 1 -and $tokenLength -eq 2 `
+          -and (Test-IsBrokenMarker $chars[$wordStart]) -and $chars[$wordStart + 1] -eq 'i' `
+          -and $wordEnd -lt $len -and $chars[$wordEnd] -eq '-') {
+        $suffixStart = $wordEnd + 1
+        $suffixEnd = $suffixStart
+        while ($suffixEnd -lt $len -and [char]::IsLetter($chars[$suffixEnd])) { $suffixEnd++ }
+        $suffix = if ($suffixEnd -gt $suffixStart) { [string]::new($chars, $suffixStart, $suffixEnd - $suffixStart).ToLowerInvariant() } else { "" }
+        if ($suffix -in @('a','ai','am','ar','au')) {
+          $chars[$wordStart] = if (Get-ShouldBeUpperCase $chars $wordStart) { [char]0x021A } else { [char]0x021B }
+          $repairTokenCache[$cacheKey] = [string]::new($chars, $wordStart, $tokenLength)
+          continue
+        }
+      }
+
+      $changedByDict = $false
+      # Incearca reparare cu dictionar (≤5 markeri)
+      if ($markers.Count -le 5 -and (Invoke-TryDictionaryRepair $chars $wordStart $wordEnd $markers)) {
+        $changedByDict = $true
+      }
+
+      if (-not $changedByDict) {
+        # Fallback: reparare per-caracter cu bigram scoring
+        Invoke-BigramRepairFallback $chars $wordStart $wordEnd $markers
+      }
+
+      $repairTokenCache[$cacheKey] = [string]::new($chars, $wordStart, $tokenLength)
+      if ($changedByDict) {
+        continue
+      }
     }
-
-    # Gaseste limitele cuvantului (litere + markeri)
-    $wordStart = $i
-    while ($i -lt $len -and ([char]::IsLetter($chars[$i]) -or (Test-IsBrokenMarker $chars[$i]))) { $i++ }
-    $wordEnd = $i
-
-    # Colecteaza pozitiile markerilor
-    $markers = [System.Collections.Generic.List[int]]::new()
-    for ($j = $wordStart; $j -lt $wordEnd; $j++) {
-      if (Test-IsBrokenMarker $chars[$j]) { [void]$markers.Add($j) }
-    }
-    if ($markers.Count -eq 0) { continue }
-
-    # Regula context: ?i dupa cratima (-?i) → ți (pronume reflexiv/dativ)
-    # Exemple: Pune-ți, să-ți, fă-ți, Lasă-ți
-    if ($markers.Count -eq 1 -and ($wordEnd - $wordStart) -eq 2 `
-        -and (Test-IsBrokenMarker $chars[$wordStart]) -and $chars[$wordStart + 1] -eq 'i' `
-        -and $wordStart -gt 0 -and $chars[$wordStart - 1] -eq '-') {
-      $chars[$wordStart] = if (Get-ShouldBeUpperCase $chars $wordStart) { [char]0x021A } else { [char]0x021B }
-      continue
-    }
-
-    # Incearca reparare cu dictionar (≤5 markeri)
-    if ($markers.Count -le 5 -and (Invoke-TryDictionaryRepair $chars $wordStart $wordEnd $markers)) {
-      continue
-    }
-
-    # Fallback: reparare per-caracter cu bigram scoring
-    Invoke-BigramRepairFallback $chars $wordStart $wordEnd $markers
   }
 
   # Pas 4: â la inceput de cuvant → î (regula ortografica romana)
@@ -628,12 +773,14 @@ function Normalize-RO {
   # Pentru fiecare cuvant cu diacritice care NU exista in dictionar,
   # incearca sa inlocuiasca diacriticele cu alternative.
   # --------------------------------------------------------------------------
-  $dict = Get-RoDictionary
-  if ($dict -ne $false) {
-    $len = $chars.Length
-    $i = 0
-    while ($i -lt $len) {
-      if (-not [char]::IsLetter($chars[$i])) { $i++; continue }
+  if ($hasBrokenMarkers) {
+    $dict = Get-RoDictionary
+    if ($dict -ne $false) {
+      $diacTokenCache = @{}
+      $len = $chars.Length
+      $i = 0
+      while ($i -lt $len) {
+        if (-not [char]::IsLetter($chars[$i])) { $i++; continue }
 
       # Gaseste limitele cuvantului
       $wordStart = $i
@@ -657,10 +804,23 @@ function Normalize-RO {
 
       # Cuvantul e deja corect?
       $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
-      if ($dict.Contains($word)) { continue }
+      if ($diacTokenCache.ContainsKey($word)) {
+        $cachedWord = [string]$diacTokenCache[$word]
+        if ($cachedWord -ne $word) {
+          Set-TokenChars $chars $wordStart $cachedWord
+        }
+        continue
+      }
+      if (Test-IsKnownRoWord $word) {
+        $diacTokenCache[$word] = $word
+        continue
+      }
 
       # Prea multe diacritice → skip (explozie combinatoriala)
-      if ($diacPositions.Count -gt 5) { continue }
+      if ($diacPositions.Count -gt 5) {
+        $diacTokenCache[$word] = $word
+        continue
+      }
 
       # Salvare originale
       $diacCount = $diacPositions.Count
@@ -682,7 +842,7 @@ function Normalize-RO {
         }
 
         $word = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
-        if (-not $dict.Contains($word)) { continue }
+    if (-not (Test-IsKnownRoWord $word)) { continue }
 
         # Calculeaza scor bigram ca tiebreaker
         $score = 0
@@ -718,10 +878,16 @@ function Normalize-RO {
           for ($k = 0; $k -lt $diacCount; $k++) { $chars[$diacPositions[$k]] = $diacBestValues[$k] }
         }
       }
+
+      $diacTokenCache[$word] = [string]::new($chars, $wordStart, $wordEnd - $wordStart)
     }
   }
+  }
 
-  return [string]::new($chars)
+  $result = [string]::new($chars)
+  $result = [regex]::Replace($result, '[ \t]+(?=\r?\n|\z)', '')
+  $result = [regex]::Replace($result, '(?m)^-\s+', '-')
+  return $result
 }
 
 function Ensure-UniquePath {
@@ -1075,7 +1241,11 @@ function Get-StandaloneNormalizationResult {
 
   $bytes = [System.IO.File]::ReadAllBytes($Path)
   $res = Decode-Best $bytes
-  $fixed = Normalize-RO $res.Text
+  $fixed = if (Test-StandaloneNeedsNormalization $res.Text) {
+    Normalize-RO $res.Text
+  } else {
+    $res.Text
+  }
   $normalizedBytes = $utf8NoBom.GetBytes($fixed)
 
   return [ordered]@{
@@ -1379,7 +1549,6 @@ foreach ($root in $Paths) {
     }
 
     foreach ($video in $g.Group) {
-      $processedWorkItemsInRoot++
       Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
       Write-Host "-----------------------------------------"
       Write-Host "VIDEO:"
@@ -1743,15 +1912,18 @@ foreach ($root in $Paths) {
       }
 
       Write-Host ""
+      $processedWorkItemsInRoot++
+      Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
     }
   }
 
   foreach ($standaloneSubtitle in $standaloneSubs) {
-    $processedWorkItemsInRoot++
     Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($standaloneSubtitle.Name)"
     Write-Host "-----------------------------------------"
     Process-StandaloneSubtitle -Root $root -BackupRoot $backupRoot -Subtitle $standaloneSubtitle -PreviewOnly:$PreviewOnly
     Write-Host ""
+    $processedWorkItemsInRoot++
+    Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($standaloneSubtitle.Name)"
   }
 }
 

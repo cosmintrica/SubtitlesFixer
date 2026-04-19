@@ -8,7 +8,10 @@ internal static class ScriptLocator
     private static string? _cachedPath;
 
     /// <summary>
-    /// Preferă fixsubs.ps1 lângă exe (ex. publish folder). Altfel extrage din resursă încorporată (ex. single-file).
+    /// Preferă întotdeauna fixsubs.ps1 lângă exe (ex. publish folder).
+    /// Doar dacă lipsește, extrage scriptul din resursă încorporată (ex. single-file).
+    /// Dictionarul words_ro.gz devine astfel opțional: dacă nu există lângă script,
+    /// motorul PowerShell rulează în modul rapid, fără costul mare al dictionarului.
     /// </summary>
     public static string GetScriptPath()
     {
@@ -16,8 +19,7 @@ internal static class ScriptLocator
             return _cachedPath;
 
         var sideBySide = Path.Combine(AppContext.BaseDirectory, "fixsubs.ps1");
-        var sideBySideDictionary = Path.Combine(AppContext.BaseDirectory, "words_ro.gz");
-        if (File.Exists(sideBySide) && File.Exists(sideBySideDictionary))
+        if (File.Exists(sideBySide))
         {
             _cachedPath = sideBySide;
             return _cachedPath;

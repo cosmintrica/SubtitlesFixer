@@ -219,7 +219,7 @@
         <Border Grid.Row="2"
                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                 BorderThickness="0,1,0,0"
-                Padding="24,8,24,8"
+                Padding="20,4,20,4"
                 Background="{DynamicResource ControlFillColorDefaultBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -232,40 +232,35 @@
                            Grid.Column="0"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           FontSize="11.5"
-                           Text="Subtitles Fixer v1.0.7 · Cosmin Trica" />
+                           FontSize="10.5"
+                           Text="Subtitles Fixer v1.0.8 · Cosmin Trica" />
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               FontSize="11.5"
-                               Margin="0,0,6,0"
-                               Text="Sustine proiectul:" />
                     <ui:HyperlinkButton Content="Revolut"
-                                        FontSize="10.5"
-                                        Padding="4,2"
+                                        FontSize="10"
+                                        Padding="4,0"
                                         NavigateUri="https://revolut.me/mtvtrk"
                                         ToolTip="Doneaza prin Revolut" />
                     <TextBlock VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               FontSize="11.5"
+                               FontSize="10"
                                Margin="2,0"
                                Text="·" />
-                    <ui:HyperlinkButton Content="Card/Apple/Google Pay"
-                                        FontSize="10.5"
-                                        Padding="4,2"
+                    <ui:HyperlinkButton Content="Stripe"
+                                        FontSize="10"
+                                        Padding="4,0"
                                         NavigateUri="https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01"
-                                        ToolTip="Doneaza prin Stripe" />
+                                        ToolTip="Doneaza prin Stripe (card / Apple Pay / Google Pay)" />
                     <TextBlock VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               FontSize="11.5"
+                               FontSize="10"
                                Margin="2,0"
                                Text="·" />
                     <ui:HyperlinkButton Content="GitHub"
-                                        FontSize="10.5"
-                                        Padding="4,2"
+                                        FontSize="10"
+                                        Padding="4,0"
                                         NavigateUri="https://github.com/cosmintrica/SubtitlesFixer"
                                         ToolTip="Cod sursa pe GitHub" />
                 </StackPanel>

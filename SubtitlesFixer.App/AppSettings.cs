@@ -8,8 +8,7 @@ public sealed class AppSettings
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    public static string SettingsPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SubtitlesFixer", "settings.json");
+    public static string SettingsPath => UserDataPaths.SettingsFile;
 
     // ── Setari existente ────────────────────────────────────────────────────
     public string? LastFolderPath    { get; set; }

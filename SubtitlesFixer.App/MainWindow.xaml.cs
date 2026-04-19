@@ -3,9 +3,12 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using Media = System.Windows.Media;
 using SubtitlesFixer.App.Subtitles;
 
@@ -30,6 +33,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private bool _uiReady;
     private string _workProgressLabel = string.Empty;
 
+    private Process? _runningProcess;
+    private readonly object _processLock = new();
+    private bool _shuttingDown;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -47,7 +54,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         UpdateActionState();
 
         Loaded += MainWindow_Loaded;
-        Closed += (_, _) => UpdateService.Release(_preparedUpdate?.Manager);
+        Closing += MainWindow_Closing;
+        Closed += (_, _) =>
+        {
+            KillRunningProcess();
+            UpdateService.Release(_preparedUpdate?.Manager);
+        };
 
         // Footer version - read from assembly so it updates automatically
         var assembly = typeof(MainWindow).Assembly;
@@ -240,7 +252,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        if (!TryGetFolder(out var folder) || !TryGetScriptPath(out var scriptPath))
+        if (!TryGetFolder(out var folder))
             return;
 
         SaveCurrentSettings(folder);
@@ -249,6 +261,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var overwriteRo = OverwriteRoCheckBox.IsChecked == true;
         var summaryPath = CreateTempJsonPath("summary");
         string? selectionPath = null;
+        if (!TryGetScriptPath(out var scriptPath))
+            return;
 
         try
         {
@@ -267,8 +281,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     selectionPath: selectionPath)
                 .ConfigureAwait(true);
 
+            if (_shuttingDown)
+                return;
+
             var payload = await ReadSummaryPayloadAsync(summaryPath).ConfigureAwait(true);
-            await PostProcessGeneratedSubtitlesAsync(payload).ConfigureAwait(true);
             InitializeLastRunSelectionState(payload);
             _lastRun = payload;
             LastRunStore.Save(payload);
@@ -401,7 +417,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task<bool> AnalyzeAndLoadPlanAsync()
     {
-        if (!TryGetFolder(out var folder) || !TryGetScriptPath(out var scriptPath))
+        if (!TryGetFolder(out var folder))
             return false;
 
         SaveCurrentSettings(folder);
@@ -410,6 +426,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var overwriteRo = OverwriteRoCheckBox.IsChecked == true;
         var previewPath = CreateTempJsonPath("preview");
         string? selectionPath = null;
+        if (!TryGetScriptPath(out var scriptPath))
+            return false;
 
         try
         {
@@ -433,6 +451,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                     selectionPath: selectionPath,
                     previewOnly: true)
                 .ConfigureAwait(true);
+
+            if (_shuttingDown)
+                return false;
 
             var payload = await ReadPlanPayloadAsync(previewPath).ConfigureAwait(true);
             _currentPlan = payload;
@@ -575,7 +596,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         psi.ArgumentList.Add("-NoPause");
 
         if (!recurse)
-            psi.ArgumentList.Add("-Recurse:$false");
+        {
+            psi.ArgumentList.Add("-NoRecurse");
+        }
         if (overwriteRo)
             psi.ArgumentList.Add("-OverwriteRo");
         if (!string.IsNullOrWhiteSpace(summaryPath))
@@ -596,43 +619,82 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (previewOnly)
             psi.ArgumentList.Add("-PreviewOnly");
 
-        using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+        var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
 
         proc.OutputDataReceived += (_, args) =>
         {
             if (args.Data is not null)
-                Dispatcher.Invoke(() =>
-                {
-                    if (!TryHandleProgressLine(args.Data))
-                        AppendLogLine(args.Data);
-                });
+                QueueLogLine(args.Data);
         };
         proc.ErrorDataReceived += (_, args) =>
         {
             if (args.Data is not null)
-                Dispatcher.Invoke(() =>
-                {
-                    if (!TryHandleProgressLine(args.Data))
-                        AppendLogLine(args.Data);
-                });
+                QueueLogLine(args.Data);
         };
 
-        if (!proc.Start())
-            throw new InvalidOperationException("Nu s-a putut porni powershell.exe.");
+        try
+        {
+            if (!proc.Start())
+                throw new InvalidOperationException("Nu s-a putut porni powershell.exe.");
 
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
+            lock (_processLock)
+                _runningProcess = proc;
 
-        await proc.WaitForExitAsync().ConfigureAwait(true);
-        // WaitForExit() fara timeout este necesar pentru a drena bufferele de output
-        // asincrone (BeginOutputReadLine), dar trebuie rulat pe un background thread
-        // ca sa nu blocheze UI dispatcher-ul cu 30-60 secunde.
-        await Task.Run(() => proc.WaitForExit()).ConfigureAwait(true);
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
 
-        AppendLogLine(string.Empty);
-        AppendLogLine($"[Proces incheiat cu codul {proc.ExitCode}]");
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"Scriptul s-a oprit cu eroarea {proc.ExitCode}. Verifica jurnalul tehnic.");
+            await proc.WaitForExitAsync().ConfigureAwait(true);
+            // WaitForExit() fara timeout este necesar pentru a drena bufferele de output
+            // asincrone (BeginOutputReadLine), dar trebuie rulat pe un background thread
+            // ca sa nu blocheze UI dispatcher-ul cu 30-60 secunde.
+            await Task.Run(() => proc.WaitForExit()).ConfigureAwait(true);
+
+            if (_shuttingDown)
+                return;
+
+            FlushLogQueue();
+            AppendLogLine(string.Empty);
+            AppendLogLine($"[Proces incheiat cu codul {proc.ExitCode}]");
+            if (proc.ExitCode != 0)
+                throw new InvalidOperationException($"Scriptul s-a oprit cu eroarea {proc.ExitCode}. Verifica jurnalul tehnic.");
+        }
+        finally
+        {
+            lock (_processLock)
+            {
+                if (ReferenceEquals(_runningProcess, proc))
+                    _runningProcess = null;
+            }
+            try { proc.Dispose(); } catch { }
+        }
+    }
+
+    private void KillRunningProcess()
+    {
+        Process? proc;
+        lock (_processLock)
+        {
+            proc = _runningProcess;
+            _runningProcess = null;
+        }
+        if (proc is null)
+            return;
+
+        try
+        {
+            if (!proc.HasExited)
+                proc.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Procesul poate fi deja mort sau handle-ul invalid; ignorat.
+        }
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        _shuttingDown = true;
+        KillRunningProcess();
     }
 
     private void PopulatePlanView(FixPlanPayload? payload)
@@ -1282,9 +1344,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void UpdateWorkProgress(int current, int total, string? itemLabel)
     {
+        var singleItemPending = total == 1 && current <= 0;
+
         if (WorkProgressBar is not null)
         {
-            WorkProgressBar.IsIndeterminate = total <= 0;
+            WorkProgressBar.IsIndeterminate = total <= 0 || singleItemPending;
             WorkProgressBar.Visibility = Visibility.Visible;
             if (total > 0)
             {
@@ -1297,9 +1361,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var cleanLabel = Path.GetFileNameWithoutExtension(itemLabel ?? string.Empty);
         if (cleanLabel.Length > 56)
             cleanLabel = cleanLabel[..26] + "..." + cleanLabel[^24..];
-        StatusTextBlock.Text = total > 0
-            ? $"{_workProgressLabel} {current} din {total}" + (string.IsNullOrWhiteSpace(cleanLabel) ? string.Empty : $": {cleanLabel}")
-            : _workProgressLabel + "...";
+        StatusTextBlock.Text = total switch
+        {
+            <= 0 => _workProgressLabel + "...",
+            1 when singleItemPending => string.IsNullOrWhiteSpace(cleanLabel)
+                ? _workProgressLabel + "..."
+                : $"{_workProgressLabel}: {cleanLabel}",
+            _ => $"{_workProgressLabel} {current} din {total}" + (string.IsNullOrWhiteSpace(cleanLabel) ? string.Empty : $": {cleanLabel}")
+        };
     }
 
     private static TextBlock CreatePlaceholderText(string message)
@@ -1350,44 +1419,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         SelectAllRestoreButton.IsEnabled = !_isBusy && hasRestorableItems;
         ClearRestoreSelectionButton.IsEnabled = !_isBusy && hasRestoreSelection;
         RestoreSelectedButton.IsEnabled = !_isBusy && hasRestoreSelection;
-    }
-
-    private async Task PostProcessGeneratedSubtitlesAsync(FixSummaryPayload payload)
-    {
-        if (payload.Items is not { Count: > 0 })
-            return;
-
-        foreach (var item in payload.Items.Where(i =>
-                     string.Equals(i.Status, "ok", StringComparison.OrdinalIgnoreCase) &&
-                     !string.IsNullOrWhiteSpace(i.TargetPath) &&
-                     File.Exists(i.TargetPath)))
-        {
-            var changed = await NormalizeSubtitleFileInPlaceAsync(item.TargetPath!).ConfigureAwait(true);
-            if (!changed)
-                continue;
-
-            item.EncodingDetected = string.IsNullOrWhiteSpace(item.EncodingDetected)
-                ? "Normalizare suplimentara aplicata"
-                : item.EncodingDetected + " + normalizare suplimentara";
-            if (!string.IsNullOrWhiteSpace(item.Message))
-                item.Message += " Am reparat suplimentar caracterele stricate.";
-
-            AppendLogLine("[Normalizare suplimentara] " + Path.GetFileName(item.TargetPath));
-        }
-    }
-
-    private static async Task<bool> NormalizeSubtitleFileInPlaceAsync(string path)
-    {
-        var originalBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
-        var decoded = SubtitleNormalizer.DecodeBytes(originalBytes);
-        var normalized = SubtitleNormalizer.Normalize(decoded);
-        var normalizedBytes = new UTF8Encoding(false).GetBytes(normalized);
-
-        if (originalBytes.AsSpan().SequenceEqual(normalizedBytes))
-            return false;
-
-        await File.WriteAllTextAsync(path, normalized, new UTF8Encoding(false)).ConfigureAwait(false);
-        return true;
     }
 
     private void SetBusyState(bool busy)
@@ -2214,6 +2245,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void AppendLogSection(string title)
     {
+        FlushLogQueue();
         if (LogTextBox.Text.Length > 0)
             LogTextBox.AppendText(Environment.NewLine + Environment.NewLine);
 
@@ -2226,6 +2258,77 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (LogTextBox.Text.Length > 0)
             LogTextBox.AppendText(Environment.NewLine);
         LogTextBox.AppendText(line);
+        LogTextBox.ScrollToEnd();
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _logQueue = new();
+    private int _logFlushScheduled;
+    private int _progressFlushScheduled;
+    private volatile ProgressSnapshot? _pendingProgress;
+
+    private sealed record ProgressSnapshot(int Current, int Total, string? Label);
+
+    private void QueueLogLine(string line)
+    {
+        if (TryParseProgress(line, out var snapshot))
+        {
+            _pendingProgress = snapshot;
+            if (System.Threading.Interlocked.CompareExchange(ref _progressFlushScheduled, 1, 0) == 0)
+            {
+                Dispatcher.BeginInvoke(FlushProgress, DispatcherPriority.Input);
+            }
+            return;
+        }
+
+        _logQueue.Enqueue(line);
+        if (System.Threading.Interlocked.CompareExchange(ref _logFlushScheduled, 1, 0) == 0)
+        {
+            Dispatcher.BeginInvoke(FlushLogQueue, DispatcherPriority.Background);
+        }
+    }
+
+    private static bool TryParseProgress(string line, out ProgressSnapshot snapshot)
+    {
+        snapshot = null!;
+        if (string.IsNullOrEmpty(line) || !line.StartsWith("__SF_PROGRESS__|", StringComparison.Ordinal))
+            return false;
+
+        var parts = line.Split('|', 4);
+        if (parts.Length < 4)
+        {
+            snapshot = new ProgressSnapshot(0, 0, null);
+            return true;
+        }
+
+        if (!int.TryParse(parts[1], out var current)) current = 0;
+        if (!int.TryParse(parts[2], out var total)) total = 0;
+        snapshot = new ProgressSnapshot(current, total, parts[3]);
+        return true;
+    }
+
+    private void FlushProgress()
+    {
+        System.Threading.Interlocked.Exchange(ref _progressFlushScheduled, 0);
+        var snap = _pendingProgress;
+        if (snap is null) return;
+        UpdateWorkProgress(snap.Current, snap.Total, snap.Label);
+    }
+
+    private void FlushLogQueue()
+    {
+        System.Threading.Interlocked.Exchange(ref _logFlushScheduled, 0);
+        if (_logQueue.IsEmpty) return;
+
+        var sb = new System.Text.StringBuilder();
+        while (_logQueue.TryDequeue(out var line))
+        {
+            if (sb.Length > 0 || LogTextBox.Text.Length > 0)
+                sb.Append(Environment.NewLine);
+            sb.Append(line);
+        }
+        if (sb.Length == 0) return;
+
+        LogTextBox.AppendText(sb.ToString());
         LogTextBox.ScrollToEnd();
     }
 

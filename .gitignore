@@ -1,4 +1,5 @@
 publish/
+Releases/
 .vs/
 bin/
 obj/
@@ -6,3 +7,8 @@ obj/
 backups/
 PUBLISH.md
 docs/PUBLISH.md
+ignore for tests/
+test.srt
+test_aa_fix.ps1
+test_norm.cs
+test_norm_run.csx

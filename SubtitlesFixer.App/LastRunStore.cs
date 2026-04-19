@@ -7,8 +7,7 @@ internal static class LastRunStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private static string LastRunPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SubtitlesFixer", "last-run.json");
+    private static string LastRunPath => UserDataPaths.LastRunFile;
 
     public static FixSummaryPayload? Load()
     {
