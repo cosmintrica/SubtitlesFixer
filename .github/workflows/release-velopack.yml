@@ -56,6 +56,9 @@ jobs:
       - name: Build and upload Velopack release
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+
           dotnet tool install -g vpk --version 0.0.1298
           $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
 

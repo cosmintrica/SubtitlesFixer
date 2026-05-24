@@ -233,7 +233,7 @@
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            FontSize="10.5"
-                           Text="Subtitles Fixer v1.0.8 · Cosmin Trica" />
+                           Text="Subtitles Fixer v1.0.9 · Cosmin Trica" />
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"

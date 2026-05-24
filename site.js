@@ -1,6 +1,6 @@
 ﻿window.SubtitlesFixerConfig = {
   productName: "Subtitles Fixer",
-  version: "1.0.8",
+  version: "1.0.9",
   producer: "Cosmin Trica",
   copyright: "Copyright \u00A9 2026 Cosmin Trica. All rights reserved.",
   downloadUrl: "https://github.com/cosmintrica/SubtitlesFixer/releases/latest",
@@ -19,26 +19,45 @@
     if (el) el.href = config.downloadUrl;
   });
 
+  const donateContainers = document.querySelectorAll(".donate-container");
+
+  function setDonateOpen(container, open) {
+    container.classList.toggle("active", open);
+    const section = container.closest(".hero, .cta-bottom");
+    if (section) section.classList.toggle("donate-open", open);
+    const button = container.querySelector("button");
+    if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function closeDonateMenus(except = null) {
+    donateContainers.forEach(container => {
+      if (container !== except) setDonateOpen(container, false);
+    });
+  }
+
   // Donate dropdown toggle
-  document.querySelectorAll(".donate-container").forEach(container => {
+  donateContainers.forEach(container => {
     const btn = container.querySelector("button");
+    const menu = container.querySelector(".donate-menu");
+
+    if (menu) {
+      menu.addEventListener("click", e => e.stopPropagation());
+    }
+
     if (btn) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        
-        // Close others
-        document.querySelectorAll(".donate-container").forEach(c => {
-          if (c !== container) c.classList.remove("active");
-        });
-        
-        container.classList.toggle("active");
+        const shouldOpen = !container.classList.contains("active");
+        closeDonateMenus(container);
+        setDonateOpen(container, shouldOpen);
       });
     }
   });
 
-  // Close dropdown on click outside
-  document.addEventListener("click", () => {
-    document.querySelectorAll(".donate-container").forEach(c => c.classList.remove("active"));
+  // Close dropdown on click outside or Escape
+  document.addEventListener("click", () => closeDonateMenus());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDonateMenus();
   });
 
   // Version text in hero button
