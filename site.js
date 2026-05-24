@@ -21,89 +21,34 @@
   });
 
   const donateContainers = document.querySelectorAll(".donate-container");
-  const donateBackdrop = document.getElementById("donate-backdrop");
-  const mobileDonateMq = window.matchMedia("(max-width: 720px)");
 
-  function usesFixedDonateMenu() {
-    return mobileDonateMq.matches;
-  }
-
-  function positionDonateMenu(container) {
-    const menu = container.querySelector(".donate-menu");
-    const button = container.querySelector("button");
-    if (!menu || !button) return;
-
-    if (!usesFixedDonateMenu()) {
-      menu.style.removeProperty("--donate-menu-top");
-      menu.style.removeProperty("--donate-menu-left");
-      return;
-    }
-
-    const rect = button.getBoundingClientRect();
-    menu.style.setProperty("--donate-menu-top", `${rect.bottom + 12}px`);
-    menu.style.setProperty("--donate-menu-left", `${rect.left + rect.width / 2}px`);
-  }
-
-  function syncDonateBackdrop() {
-    if (!donateBackdrop) return;
-    const open = Array.from(donateContainers).some(c => c.classList.contains("active"));
-    const showBackdrop = open && usesFixedDonateMenu();
-    donateBackdrop.classList.toggle("active", showBackdrop);
-    donateBackdrop.setAttribute("aria-hidden", showBackdrop ? "false" : "true");
-  }
-
-  function clearDonateMenuPosition(container) {
-    const menu = container.querySelector(".donate-menu");
-    menu?.style.removeProperty("--donate-menu-top");
-    menu?.style.removeProperty("--donate-menu-left");
+  function isInsideDonateUi(target) {
+    return target instanceof Element && target.closest(".donate-container");
   }
 
   function setDonateOpen(container, open) {
     container.classList.toggle("active", open);
     const button = container.querySelector("button");
     if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
-
-    if (open) {
-      requestAnimationFrame(() => positionDonateMenu(container));
-    } else {
-      clearDonateMenuPosition(container);
-    }
-
-    syncDonateBackdrop();
   }
 
   function closeDonateMenus(except = null) {
     donateContainers.forEach(container => {
       if (container !== except) setDonateOpen(container, false);
     });
-    syncDonateBackdrop();
   }
-
-  function repositionOpenDonateMenus() {
-    donateContainers.forEach(container => {
-      if (container.classList.contains("active")) positionDonateMenu(container);
-    });
-  }
-
-  if (donateBackdrop) {
-    donateBackdrop.addEventListener("click", () => closeDonateMenus());
-  }
-
-  mobileDonateMq.addEventListener("change", () => {
-    donateContainers.forEach(clearDonateMenuPosition);
-    repositionOpenDonateMenus();
-  });
-
-  window.addEventListener("resize", repositionOpenDonateMenus);
-  window.addEventListener("scroll", repositionOpenDonateMenus, { passive: true });
 
   donateContainers.forEach(container => {
     const btn = container.querySelector("button");
     const menu = container.querySelector(".donate-menu");
 
     if (menu) {
-      menu.addEventListener("click", e => e.stopPropagation());
+      menu.addEventListener("click", (e) => e.stopPropagation());
     }
+
+    container.querySelectorAll(".donate-item").forEach(link => {
+      link.addEventListener("click", (e) => e.stopPropagation());
+    });
 
     if (btn) {
       btn.addEventListener("click", (e) => {
@@ -115,7 +60,11 @@
     }
   });
 
-  document.addEventListener("click", () => closeDonateMenus());
+  document.addEventListener("click", (e) => {
+    if (isInsideDonateUi(e.target)) return;
+    closeDonateMenus();
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDonateMenus();
   });
