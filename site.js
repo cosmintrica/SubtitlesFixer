@@ -47,8 +47,9 @@
   function syncDonateBackdrop() {
     if (!donateBackdrop) return;
     const open = Array.from(donateContainers).some(c => c.classList.contains("active"));
-    donateBackdrop.classList.toggle("active", open);
-    donateBackdrop.setAttribute("aria-hidden", open ? "false" : "true");
+    const showBackdrop = open && usesFixedDonateMenu();
+    donateBackdrop.classList.toggle("active", showBackdrop);
+    donateBackdrop.setAttribute("aria-hidden", showBackdrop ? "false" : "true");
   }
 
   function clearDonateMenuPosition(container) {
