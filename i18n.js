@@ -346,6 +346,7 @@ window.SubtitlesFixerI18n = {
     }
 
     document.querySelectorAll("[data-i18n]").forEach(el => {
+      if (el.classList.contains("download-count")) return;
       const value = this.getNested(dict, el.dataset.i18n);
       if (value == null) return;
       let localVars = vars;

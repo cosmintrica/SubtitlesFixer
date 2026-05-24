@@ -129,7 +129,14 @@
   if (footer) footer.textContent = config.copyright;
 
   function updateDownloadCountLabels() {
-    if (lastDownloadTotal <= 0 || !i18n) return;
+    const els = document.querySelectorAll("#download-count-top, #download-count-bottom");
+    if (lastDownloadTotal <= 0 || !i18n) {
+      els.forEach(el => {
+        el.textContent = "";
+        el.hidden = true;
+      });
+      return;
+    }
 
     const lang = document.documentElement.lang === "en" ? "en" : "ro";
     const template = i18n.getNested(i18n[lang], "downloads.count");
@@ -137,8 +144,7 @@
     const formattedCount = new Intl.NumberFormat(locale).format(lastDownloadTotal);
     const label = i18n.format(template, { count: formattedCount });
 
-    document.querySelectorAll("#download-count-top, #download-count-bottom").forEach(el => {
-      if (!el) return;
+    els.forEach(el => {
       el.textContent = label;
       el.hidden = false;
     });
