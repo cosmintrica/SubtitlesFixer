@@ -3,25 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confidentialitate - Subtitles Fixer</title>
+  <title>Confidențialitate - Subtitles Fixer</title>
   <link rel="icon" type="image/png" href="./favicon.png">
   <link rel="stylesheet" href="./styles.css">
+  <script>
+    (function () {
+      var key = "sf-lang", saved = localStorage.getItem(key), lang = saved;
+      if (lang !== "ro" && lang !== "en") {
+        var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+        if (langs.some(function (l) { return /^ro(-|$)/i.test(l); })) lang = "ro";
+        else {
+          try { if (Intl.DateTimeFormat().resolvedOptions().timeZone === "Europe/Bucharest") lang = "ro"; } catch (e) {}
+        }
+        if (!lang) lang = "en";
+      }
+      document.documentElement.lang = lang;
+      document.documentElement.dataset.lang = lang;
+    })();
+  </script>
 </head>
-<body style="max-width:720px;margin:80px auto;padding:0 24px;line-height:1.7;color:#ccc;font-family:Inter,sans-serif">
-  <a href="index.html" style="color:#6366f1;font-size:0.9rem">&larr; Inapoi</a>
-  <h1 style="color:#fff;margin-top:24px">Politica de Confidentialitate</h1>
-  <p>Ultima actualizare: Aprilie 2026</p>
+<body class="legal-page" data-legal-page="privacy">
+  <header class="legal-top">
+    <a href="index.html" class="legal-back" data-i18n="legal.back">&larr; Înapoi la site</a>
+    <div class="lang-switch" role="group" aria-label="Limba site-ului">
+      <button type="button" class="lang-btn" data-lang="ro" aria-pressed="true">RO</button>
+      <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
 
-  <h2 style="color:#fff">1. Introducere</h2>
-  <p>Subtitles Fixer este o aplicatie Windows care functioneaza exclusiv local. Nu colectam, nu transmitem si nu stocam niciun fel de date personale pe servere externe.</p>
+  <main class="legal-main">
+    <h1 data-i18n="legal.privacy.title">Politica de confidențialitate</h1>
+    <p class="legal-updated" data-i18n="legal.updated">Ultima actualizare: Aprilie 2026</p>
 
-  <h2 style="color:#fff">2. Date procesate</h2>
-  <p>Aplicatia proceseaza exclusiv fisierele de pe calculatorul tau (fisiere video si subtitrari). Toate operatiunile se desfasoara pe dispozitivul tau, fara conexiune la internet.</p>
+    <h2 data-i18n="legal.privacy.s1Title">1. Introducere</h2>
+    <p data-i18n="legal.privacy.s1Body">Subtitles Fixer este o aplicație Windows care funcționează exclusiv local. Nu colectăm, nu transmitem și nu stocăm date personale pe servere externe.</p>
 
-  <h2 style="color:#fff">3. Backup si fisiere</h2>
-  <p>Aplicatia creeaza copii de backup ale fisierelor originale intr-un subfolder local dedicat. Aceste fisiere nu sunt transmise nicaieri.</p>
+    <h2 data-i18n="legal.privacy.s2Title">2. Date procesate</h2>
+    <p data-i18n="legal.privacy.s2Body">Aplicația procesează exclusiv fișierele de pe calculatorul tău (fișiere video și subtitrări). Toate operațiunile se desfășoară pe dispozitivul tău, fără conexiune la internet.</p>
 
-  <h2 style="color:#fff">4. Contact</h2>
-  <p>Pentru orice intrebare, poti lua legatura pe <a href="https://www.linkedin.com/in/cosmintrica/" style="color:#6366f1">LinkedIn</a> sau pe <a href="https://github.com/cosmintrica/SubtitlesFixer" style="color:#6366f1">GitHub</a>.</p>
+    <h2 data-i18n="legal.privacy.s3Title">3. Backup și fișiere</h2>
+    <p data-i18n="legal.privacy.s3Body">Aplicația creează copii de backup ale fișierelor originale într-un subfolder local dedicat. Aceste fișiere nu sunt transmise nicăieri.</p>
+
+    <h2 data-i18n="legal.privacy.s4Title">4. Contact</h2>
+    <p data-i18n-html="legal.privacy.s4Body">Pentru orice întrebare, poți lua legătura pe <a href="https://www.linkedin.com/in/cosmintrica/">LinkedIn</a> sau pe <a href="https://github.com/cosmintrica/SubtitlesFixer">GitHub</a>.</p>
+  </main>
+
+  <script src="./i18n.js"></script>
+  <script src="./legal.js"></script>
 </body>
 </html>

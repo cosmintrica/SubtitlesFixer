@@ -3,28 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Termeni si Conditii - Subtitles Fixer</title>
+  <title>Termeni și condiții - Subtitles Fixer</title>
   <link rel="icon" type="image/png" href="./favicon.png">
   <link rel="stylesheet" href="./styles.css">
+  <script>
+    (function () {
+      var key = "sf-lang", saved = localStorage.getItem(key), lang = saved;
+      if (lang !== "ro" && lang !== "en") {
+        var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+        if (langs.some(function (l) { return /^ro(-|$)/i.test(l); })) lang = "ro";
+        else {
+          try { if (Intl.DateTimeFormat().resolvedOptions().timeZone === "Europe/Bucharest") lang = "ro"; } catch (e) {}
+        }
+        if (!lang) lang = "en";
+      }
+      document.documentElement.lang = lang;
+      document.documentElement.dataset.lang = lang;
+    })();
+  </script>
 </head>
-<body style="max-width:720px;margin:80px auto;padding:0 24px;line-height:1.7;color:#ccc;font-family:Inter,sans-serif">
-  <a href="index.html" style="color:#6366f1;font-size:0.9rem">&larr; Inapoi</a>
-  <h1 style="color:#fff;margin-top:24px">Termeni si Conditii</h1>
-  <p>Ultima actualizare: Aprilie 2026</p>
+<body class="legal-page" data-legal-page="terms">
+  <header class="legal-top">
+    <a href="index.html" class="legal-back" data-i18n="legal.back">&larr; Înapoi la site</a>
+    <div class="lang-switch" role="group" aria-label="Limba site-ului">
+      <button type="button" class="lang-btn" data-lang="ro" aria-pressed="true">RO</button>
+      <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
 
-  <h2 style="color:#fff">1. Acceptarea termenilor</h2>
-  <p>Prin descarcarea si utilizarea aplicatiei Subtitles Fixer, accepti termenii si conditiile prezentate in acest document.</p>
+  <main class="legal-main">
+    <h1 data-i18n="legal.terms.title">Termeni și condiții</h1>
+    <p class="legal-updated" data-i18n="legal.updated">Ultima actualizare: Aprilie 2026</p>
 
-  <h2 style="color:#fff">2. Utilizare</h2>
-  <p>Aplicatia este furnizata gratuit, in regim "as-is". Este destinata exclusiv uzului personal pentru organizarea fisierelor de subtitrare aflate in proprietatea ta.</p>
+    <h2 data-i18n="legal.terms.s1Title">1. Acceptarea termenilor</h2>
+    <p data-i18n="legal.terms.s1Body">Prin descărcarea și utilizarea aplicației Subtitles Fixer, accepți termenii și condițiile prezentate în acest document.</p>
 
-  <h2 style="color:#fff">3. Limitarea raspunderii</h2>
-  <p>Autorul nu este raspunzator pentru pierderi de date rezultate in urma utilizarii aplicatiei. Iti recomandam sa verifici backup-urile create automat de aplicatie inainte de orice operatiune critica.</p>
+    <h2 data-i18n="legal.terms.s2Title">2. Utilizare</h2>
+    <p data-i18n="legal.terms.s2Body">Aplicația este furnizată gratuit, în regim "as-is". Este destinată exclusiv uzului personal pentru organizarea fișierelor de subtitrare aflate în proprietatea ta.</p>
 
-  <h2 style="color:#fff">4. Licenta</h2>
-  <p>Aplicatia este distribuita sub licenta MIT. Codul sursa este disponibil pe <a href="https://github.com/cosmintrica/SubtitlesFixer" style="color:#6366f1">GitHub</a>.</p>
+    <h2 data-i18n="legal.terms.s3Title">3. Limitarea răspunderii</h2>
+    <p data-i18n="legal.terms.s3Body">Autorul nu este răspunzător pentru pierderi de date rezultate în urma utilizării aplicației. Îți recomandăm să verifici backup-urile create automat de aplicație înainte de orice operațiune critică.</p>
 
-  <h2 style="color:#fff">5. Contact</h2>
-  <p>Pentru intrebari, contacteaza autorul pe <a href="https://www.linkedin.com/in/cosmintrica/" style="color:#6366f1">LinkedIn</a>.</p>
+    <h2 data-i18n="legal.terms.s4Title">4. Licență</h2>
+    <p data-i18n-html="legal.terms.s4Body">Aplicația este distribuită sub licența MIT. Codul sursă este disponibil pe <a href="https://github.com/cosmintrica/SubtitlesFixer">GitHub</a>.</p>
+
+    <h2 data-i18n="legal.terms.s5Title">5. Contact</h2>
+    <p data-i18n-html="legal.terms.s5Body">Pentru întrebări, contactează autorul pe <a href="https://www.linkedin.com/in/cosmintrica/">LinkedIn</a>.</p>
+  </main>
+
+  <script src="./i18n.js"></script>
+  <script src="./legal.js"></script>
 </body>
 </html>

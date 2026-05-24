@@ -4,7 +4,7 @@
   producer: "Cosmin Trica",
   copyright: "Copyright \u00A9 2026 Cosmin Trica. All rights reserved.",
   downloadUrl: "https://github.com/cosmintrica/SubtitlesFixer/releases/latest",
-  donateUrl: "#", // Handled via dropdown
+  donateUrl: "#",
   revolutUrl: "https://revolut.me/mtvtrk",
   stripeUrl: "https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01",
   linkedInUrl: "https://www.linkedin.com/in/cosmintrica/",
@@ -13,8 +13,9 @@
 
 (function () {
   const config = window.SubtitlesFixerConfig;
+  const i18n = window.SubtitlesFixerI18n;
+  let lastDownloadTotal = 0;
 
-  // Download buttons
   document.querySelectorAll("#download-button, #download-button-bottom, #nav-download").forEach(el => {
     if (el) el.href = config.downloadUrl;
   });
@@ -23,8 +24,6 @@
 
   function setDonateOpen(container, open) {
     container.classList.toggle("active", open);
-    const section = container.closest(".hero, .cta-bottom");
-    if (section) section.classList.toggle("donate-open", open);
     const button = container.querySelector("button");
     if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
   }
@@ -35,7 +34,6 @@
     });
   }
 
-  // Donate dropdown toggle
   donateContainers.forEach(container => {
     const btn = container.querySelector("button");
     const menu = container.querySelector(".donate-menu");
@@ -54,21 +52,39 @@
     }
   });
 
-  // Close dropdown on click outside or Escape
   document.addEventListener("click", () => closeDonateMenus());
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDonateMenus();
   });
 
-  // Version text in hero button
   const heroVersion = document.getElementById("hero-version-text");
   if (heroVersion) heroVersion.textContent = `v${config.version}`;
   const bottomVersion = document.getElementById("download-version-bottom");
   if (bottomVersion) bottomVersion.textContent = `v${config.version}`;
 
-  // Footer
   const footer = document.getElementById("footer-copy");
   if (footer) footer.textContent = config.copyright;
+
+  function updateDownloadCountLabels() {
+    if (lastDownloadTotal <= 0 || !i18n) return;
+
+    const lang = document.documentElement.lang === "en" ? "en" : "ro";
+    const template = i18n.getNested(i18n[lang], "downloads.count");
+    const locale = lang === "ro" ? "ro-RO" : "en-US";
+    const formattedCount = new Intl.NumberFormat(locale).format(lastDownloadTotal);
+    const label = i18n.format(template, { count: formattedCount });
+
+    document.querySelectorAll("#download-count-top, #download-count-bottom").forEach(el => {
+      if (!el) return;
+      el.textContent = label;
+      el.hidden = false;
+    });
+  }
+
+  if (i18n) {
+    i18n.init(config.version);
+    window.addEventListener("sf-lang-change", updateDownloadCountLabels);
+  }
 
   updateDownloadCounts();
 
@@ -98,15 +114,10 @@
         return;
       }
 
-      const formattedCount = new Intl.NumberFormat("ro-RO").format(totalDownloads);
-      const label = `${formattedCount} descărcări pe GitHub`;
-      document.querySelectorAll("#download-count-top, #download-count-bottom").forEach(el => {
-        if (!el) return;
-        el.textContent = label;
-        el.hidden = false;
-      });
+      lastDownloadTotal = totalDownloads;
+      updateDownloadCountLabels();
     } catch {
-      // Daca GitHub nu raspunde sau limita API este depasita, lasam butonul curat fara count.
+      // If GitHub is unavailable or rate-limited, keep the button without a count.
     }
   }
 })();

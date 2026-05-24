@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ro">
 <head>
   <meta charset="UTF-8">
@@ -16,6 +16,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="./favicon.png">
   <link rel="stylesheet" href="./styles.css">
+  <script>
+    (function () {
+      var key = "sf-lang", saved = localStorage.getItem(key), lang = saved;
+      if (lang !== "ro" && lang !== "en") {
+        var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+        if (langs.some(function (l) { return /^ro(-|$)/i.test(l); })) lang = "ro";
+        else {
+          try { if (Intl.DateTimeFormat().resolvedOptions().timeZone === "Europe/Bucharest") lang = "ro"; } catch (e) {}
+        }
+        if (!lang) lang = "en";
+      }
+      document.documentElement.lang = lang;
+      document.documentElement.dataset.lang = lang;
+    })();
+  </script>
 </head>
 <body>
 
@@ -27,10 +42,14 @@
       <span class="nav-title">Subtitles Fixer</span>
     </a>
     <div class="nav-links">
-      <a href="#algorithm">Algoritm</a>
-      <a href="#features">Features</a>
-      <a href="#how">Cum funcționează</a>
-      <a id="nav-download" href="#" class="nav-cta">Download</a>
+      <div class="lang-switch" role="group" aria-label="Limba site-ului">
+        <button type="button" class="lang-btn" data-lang="ro" aria-pressed="true">RO</button>
+        <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+      <a href="#algorithm" data-i18n="nav.algorithm">Algoritm</a>
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#how" data-i18n="nav.how">Cum funcționează</a>
+      <a id="nav-download" href="#" class="nav-cta" data-i18n="nav.download">Download</a>
     </div>
   </nav>
 
@@ -43,15 +62,15 @@
     <div class="hero-content">
       <p class="hero-badge">
         <span class="badge-dot"></span>
-        <span>v1.0.9 &middot; Windows 10/11 &middot; Gratis</span>
+        <span data-i18n="hero.badge">v1.0.9 &middot; Windows 10/11 &middot; Gratis</span>
       </p>
 
-      <h1>
+      <h1 data-i18n-html="hero.titleHtml">
         Subtitrări impecabile,<br>
         <span class="accent">foldere curate.</span>
       </h1>
 
-      <p class="hero-sub">
+      <p class="hero-sub" data-i18n="hero.sub">
         Fără diacritice lipsă sau fișiere dezorganizate. Selectează folderul, previzualizează modificările și repară totul dintr-un singur click.
       </p>
 
@@ -59,15 +78,15 @@
         <a id="download-button" href="#" class="btn btn-primary btn-xl btn-download">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span class="btn-download-copy">
-            <span class="btn-download-label">Download <strong id="hero-version-text">v1.0.9</strong></span>
-            <span id="download-count-top" class="download-count" hidden>0 descărcări pe GitHub</span>
+            <span class="btn-download-label"><span data-i18n="hero.download">Download</span> <strong id="hero-version-text">v1.0.9</strong></span>
+            <span id="download-count-top" class="download-count" hidden data-i18n="downloads.count">0 descărcări pe GitHub</span>
           </span>
         </a>
         
           <div class="donate-container">
             <button id="donate-button" class="btn btn-ghost btn-support" type="button" aria-haspopup="true" aria-expanded="false">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-              <span>Susține proiectul</span>
+              <span data-i18n="hero.support">Susține proiectul</span>
             </button>
           
           <div class="donate-menu" id="donate-menu">
@@ -77,7 +96,7 @@
               </div>
               <div>
                 <span class="donate-item-title">Revolut</span>
-                <span class="donate-item-desc">Susținere rapidă cu Revolut Pay</span>
+                <span class="donate-item-desc" data-i18n="hero.revolutDesc">Susținere rapidă cu Revolut Pay</span>
               </div>
             </a>
             <a href="https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01" target="_blank" rel="noopener noreferrer" class="donate-item">
@@ -86,7 +105,7 @@
               </div>
               <div>
                 <span class="donate-item-title">Stripe</span>
-                <span class="donate-item-desc">Card bancar sau Google/Apple Pay</span>
+                <span class="donate-item-desc" data-i18n="hero.stripeDesc">Card bancar sau Google/Apple Pay</span>
               </div>
             </a>
           </div>
@@ -111,16 +130,16 @@
 
         <div class="mockup-body">
           <div class="mockup-chips">
-            <span class="m-chip m-blue">Se schimbă - <b>3</b></span>
-            <span class="m-chip m-green">OK - <b>12</b></span>
-            <span class="m-chip m-amber">Alege - <b>1</b></span>
+            <span class="m-chip m-blue"><span data-i18n="mockup.chipChanging">Se schimbă</span> - <b>3</b></span>
+            <span class="m-chip m-green"><span data-i18n="mockup.chipOk">OK</span> - <b>12</b></span>
+            <span class="m-chip m-amber"><span data-i18n="mockup.chipChoose">Alege</span> - <b>1</b></span>
           </div>
 
           <div class="mockup-card">
             <div class="mc-bar mc-green"></div>
             <div class="mc-text">
               <span class="mc-ep">S06E03</span>
-              <span class="mc-status">Nu se schimbă</span>
+              <span class="mc-status" data-i18n="mockup.unchanged">Nu se schimbă</span>
             </div>
           </div>
 
@@ -128,13 +147,13 @@
             <div class="mc-bar mc-blue"></div>
             <div class="mc-text">
               <span class="mc-ep">S06E04</span>
-              <span class="mc-status status-fix">Se reface</span>
+              <span class="mc-status status-fix" data-i18n="mockup.fixing">Se reface</span>
             </div>
           </div>
 
           <div class="mockup-progress">
             <div class="mp-track"><div class="mp-fill"></div></div>
-            <span class="mp-label">Procesez - 6 din 12</span>
+            <span class="mp-label" data-i18n="mockup.progress" data-i18n-vars='{"current":"6","total":"12"}'>Procesez - 6 din 12</span>
           </div>
         </div>
       </div>
@@ -148,191 +167,191 @@
         <span class="sub-text">&#x0219;&#x021B;&#x0103;&#x00EE;&#x00E2; &#x2713;</span>
       </div>
       <div class="float-sub float-sub-3">
-        <span class="sub-time">?tiai c&#x0103; &#x2192; reparat</span>
-        <span class="sub-text">&#x0219;tiai c&#x0103; &#x2713;</span>
+        <span class="sub-time" data-i18n-html="mockup.float1">?tiai c&#x0103; &#x2192; reparat</span>
+        <span class="sub-text" data-i18n-html="mockup.float2">&#x0219;tiai c&#x0103; &#x2713;</span>
       </div>
     </div>
 
-    <p class="hero-note">
+    <p class="hero-note" data-i18n-html="hero.noteHtml">
       <strong>Noutăți în v1.0.9:</strong> publicare Velopack fără coliziune cu release-ul anterior, dropdown de donații refăcut pentru mobil
       și fundal full-width mai fluid pentru pagină.
     </p>
   </section>
 
   <section class="algorithm" id="algorithm">
-    <div class="section-label">Sub capotă</div>
-    <h2>Cel mai avansat algoritm de reparare<br>pentru subtitrări românești.</h2>
-    <p class="algo-sub">Nu e un simplu find &amp; replace. Este un pipeline de 5 pași care înțelege limba română.</p>
+    <div class="section-label" data-i18n="algorithm.label">Sub capotă</div>
+    <h2 data-i18n-html="algorithm.titleHtml">Cel mai avansat algoritm de reparare<br>pentru subtitrări românești.</h2>
+    <p class="algo-sub" data-i18n="algorithm.sub">Nu e un simplu find &amp; replace. Este un pipeline de 5 pași care înțelege limba română.</p>
 
     <div class="algo-grid">
       <article class="algo-card algo-card-hero">
         <div class="algo-number">960K</div>
-        <h3>Dicționar complet</h3>
-        <p>Generat din Hunspell <code>ro_RO</code> cu toate formele flexionare. Fiecare cuvânt reparat este verificat în dicționar - nu se ghicește.</p>
+        <h3 data-i18n="algorithm.dictTitle">Dicționar complet</h3>
+        <p data-i18n-html="algorithm.dictBody">Generat din Hunspell <code>ro_RO</code> cu toate formele flexionare. Fiecare cuvânt reparat este verificat în dicționar - nu se ghicește.</p>
       </article>
 
       <article class="algo-card">
         <div class="algo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
-        <h3>Detecție encoding</h3>
-        <p>Win-1250, ISO-8859-2, CP852, UTF-8 BOM - scorul de încredere alege automat encoding-ul corect.</p>
+        <h3 data-i18n="algorithm.encTitle">Detecție encoding</h3>
+        <p data-i18n="algorithm.encBody">Win-1250, ISO-8859-2, CP852, UTF-8 BOM - scorul de încredere alege automat encoding-ul corect.</p>
       </article>
 
       <article class="algo-card">
         <div class="algo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         </div>
-        <h3>Reparare combinatorică</h3>
-        <p>Markerii <code>?</code> <code>�</code> <code>`</code> sunt înlocuiți cu toate combinațiile posibile de ș, ț, ă, â, î și validați în dicționar.</p>
+        <h3 data-i18n="algorithm.combTitle">Reparare combinatorică</h3>
+        <p data-i18n-html="algorithm.combBody">Markerii <code>?</code> <code>&#xFFFD;</code> <code>`</code> sunt înlocuiți cu toate combinațiile posibile de ș, ț, ă, â, î și validați în dicționar.</p>
       </article>
 
       <article class="algo-card">
         <div class="algo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         </div>
-        <h3>Scoring bigram + trigram</h3>
-        <p>Când dicționarul nu decide singur, scorul statistic pe bigramele limbii române departajează candidații.</p>
+        <h3 data-i18n="algorithm.scoreTitle">Scoring bigram + trigram</h3>
+        <p data-i18n="algorithm.scoreBody">Când dicționarul nu decide singur, scorul statistic pe bigramele limbii române departajează candidații.</p>
       </article>
 
       <article class="algo-card">
         <div class="algo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         </div>
-        <h3>Corectare diacritice greșite</h3>
-        <p>Pas 5 detectează și repară ș↔ț, ă↔â↔î greșit plasate, verificând fiecare variantă în dicționar.</p>
+        <h3 data-i18n="algorithm.diacTitle">Corectare diacritice greșite</h3>
+        <p data-i18n="algorithm.diacBody">Pas 5 detectează și repară ș↔ț, ă↔â↔î greșit plasate, verificând fiecare variantă în dicționar.</p>
       </article>
 
       <article class="algo-card">
         <div class="algo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         </div>
-        <h3>Cedillă → virgulă</h3>
-        <p>Convertește automat ş/ţ (cedillă) în ș/ț (virgulă) - forma corectă conform standardului Unicode.</p>
+        <h3 data-i18n="algorithm.cedillaTitle">Cedillă → virgulă</h3>
+        <p data-i18n="algorithm.cedillaBody">Convertește automat ş/ţ (cedillă) în ș/ț (virgulă) - forma corectă conform standardului Unicode.</p>
       </article>
 
       <article class="algo-card">
         <div class="algo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         </div>
-        <h3>Zero pierderi de date</h3>
-        <p>Backup automat înainte de orice modificare. Restore cu un click. Nimic nu dispare vreodată.</p>
+        <h3 data-i18n="algorithm.backupTitle">Zero pierderi de date</h3>
+        <p data-i18n="algorithm.backupBody">Backup automat înainte de orice modificare. Restore cu un click. Nimic nu dispare vreodată.</p>
       </article>
     </div>
   </section>
 
   <section class="features" id="features">
-    <div class="section-label">Ce face</div>
-    <h2>Tot ce ai nevoie, nimic în plus.</h2>
+    <div class="section-label" data-i18n="features.label">Ce face</div>
+    <h2 data-i18n="features.title">Tot ce ai nevoie, nimic în plus.</h2>
 
     <div class="feature-grid">
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         </div>
-        <h3>Repară encoding</h3>
-        <p>Win-1250, ISO-8859-2, UTF-8 BOM - toate devin UTF-8 curat, cu diacritice corecte.</p>
+        <h3 data-i18n="features.encTitle">Repară encoding</h3>
+        <p data-i18n="features.encBody">Win-1250, ISO-8859-2, UTF-8 BOM - toate devin UTF-8 curat, cu diacritice corecte.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/></svg>
         </div>
-        <h3>Redenumește .ro.srt</h3>
-        <p>Fiecare episod primește subtitrarea cu numele corect, direct lângă video.</p>
+        <h3 data-i18n="features.renameTitle">Redenumește .ro.srt</h3>
+        <p data-i18n="features.renameBody">Fiecare episod primește subtitrarea cu numele corect, direct lângă video.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </div>
-        <h3>Drag &amp; drop</h3>
-        <p>Trage orice folder sau fișier direct în fereastră. Fără dialog, fără click-uri inutile.</p>
+        <h3 data-i18n="features.dndTitle">Drag &amp; drop</h3>
+        <p data-i18n="features.dndBody">Trage orice folder sau fișier direct în fereastră. Fără dialog, fără click-uri inutile.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
         </div>
-        <h3>Backup automat</h3>
-        <p>Sursa și varianta veche merg în backup. Nimic nu dispare fără urmă.</p>
+        <h3 data-i18n="features.backupTitle">Backup automat</h3>
+        <p data-i18n="features.backupBody">Sursa și varianta veche merg în backup. Nimic nu dispare fără urmă.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <h3>Preview înainte de fix</h3>
-        <p>Analizezi tot, vezi exact ce se schimbă, alegi manual unde trebuie, apoi rulezi.</p>
+        <h3 data-i18n="features.previewTitle">Preview înainte de fix</h3>
+        <p data-i18n="features.previewBody">Analizezi tot, vezi exact ce se schimbă, alegi manual unde trebuie, apoi rulezi.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
         </div>
-        <h3>Restore instant</h3>
-        <p>Un click readuce totul cum era. Selectezi ce vrei, apeși restore, gata.</p>
+        <h3 data-i18n="features.restoreTitle">Restore instant</h3>
+        <p data-i18n="features.restoreBody">Un click readuce totul cum era. Selectezi ce vrei, apeși restore, gata.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         </div>
-        <h3>100% local</h3>
-        <p>Totul rulează pe PC-ul tău. Fără cloud, fără cont, fără trackere.</p>
+        <h3 data-i18n="features.localTitle">100% local</h3>
+        <p data-i18n="features.localBody">Totul rulează pe PC-ul tău. Fără cloud, fără cont, fără trackere.</p>
       </article>
 
       <article class="feat">
         <div class="feat-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2h2m5.66 0H14a2 2 0 012 2v3.34l1 1L23 7v10"/></svg>
         </div>
-        <h3>Update automat</h3>
-        <p>Noi versiuni sunt instalate automat din GitHub Releases. Fără download manual.</p>
+        <h3 data-i18n="features.updateTitle">Update automat</h3>
+        <p data-i18n="features.updateBody">Noi versiuni sunt instalate automat din GitHub Releases. Fără download manual.</p>
       </article>
     </div>
   </section>
 
   <section class="how" id="how">
-    <div class="section-label">Cum funcționează</div>
-    <h2>Trei pași. Zero complicații.</h2>
+    <div class="section-label" data-i18n="how.label">Cum funcționează</div>
+    <h2 data-i18n="how.title">Trei pași. Zero complicații.</h2>
 
     <div class="steps">
       <article class="step">
         <span class="step-n">1</span>
-        <h3>Alegi folderul</h3>
-        <p>Trage folderul în fereastră sau selectează-l din dialog.</p>
+        <h3 data-i18n="how.step1Title">Alegi folderul</h3>
+        <p data-i18n="how.step1Body">Trage folderul în fereastră sau selectează-l din dialog.</p>
       </article>
       <span class="step-arrow" aria-hidden="true">&rarr;</span>
       <article class="step">
         <span class="step-n">2</span>
-        <h3>Verifici analiza</h3>
-        <p>Vezi clar ce se repară, ce rămâne și unde alegi manual.</p>
+        <h3 data-i18n="how.step2Title">Verifici analiza</h3>
+        <p data-i18n="how.step2Body">Vezi clar ce se repară, ce rămâne și unde alegi manual.</p>
       </article>
       <span class="step-arrow" aria-hidden="true">&rarr;</span>
       <article class="step">
         <span class="step-n">3</span>
-        <h3>Rulezi fix</h3>
-        <p>Un buton. Gata. Backup e făcut, .ro.srt e scris.</p>
+        <h3 data-i18n="how.step3Title">Rulezi fix</h3>
+        <p data-i18n="how.step3Body">Un buton. Gata. Backup e făcut, .ro.srt e scris.</p>
       </article>
     </div>
   </section>
 
   <section class="cta-bottom">
     <div class="cta-inner">
-      <h2>Gata de download?</h2>
-      <p>Gratis. Fără cont. Fără reclame.</p>
+      <h2 data-i18n="cta.title">Gata de download?</h2>
+      <p data-i18n="cta.sub">Gratis. Fără cont. Fără reclame.</p>
       <div class="cta-actions">
         <a id="download-button-bottom" href="#" class="btn btn-primary btn-xl btn-download">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span class="btn-download-copy">
-            <span class="btn-download-label">Download <strong id="download-version-bottom">v1.0.9</strong></span>
-            <span id="download-count-bottom" class="download-count" hidden>0 descărcări pe GitHub</span>
+            <span class="btn-download-label"><span data-i18n="hero.download">Download</span> <strong id="download-version-bottom">v1.0.9</strong></span>
+            <span id="download-count-bottom" class="download-count" hidden data-i18n="downloads.count">0 descărcări pe GitHub</span>
           </span>
         </a>
           <div class="donate-container">
             <button id="donate-button-bottom" class="btn btn-ghost btn-support" type="button" aria-haspopup="true" aria-expanded="false">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-              <span>Susține proiectul</span>
+              <span data-i18n="hero.support">Susține proiectul</span>
             </button>
           
           <div class="donate-menu">
@@ -342,7 +361,7 @@
               </div>
               <div>
                 <span class="donate-item-title">Revolut</span>
-                <span class="donate-item-desc">Susținere rapidă cu Revolut Pay</span>
+                <span class="donate-item-desc" data-i18n="hero.revolutDesc">Susținere rapidă cu Revolut Pay</span>
               </div>
             </a>
             <a href="https://donate.stripe.com/eVq8wI9m9aOTcP88fv3VC01" target="_blank" rel="noopener noreferrer" class="donate-item">
@@ -351,7 +370,7 @@
               </div>
               <div>
                 <span class="donate-item-title">Stripe</span>
-                <span class="donate-item-desc">Card bancar sau Google/Apple Pay</span>
+                <span class="donate-item-desc" data-i18n="hero.stripeDesc">Card bancar sau Google/Apple Pay</span>
               </div>
             </a>
           </div>
@@ -363,9 +382,9 @@
   <footer class="footer">
     <p id="footer-copy">Copyright &copy; 2026 Cosmin Trica. All rights reserved.</p>
     <div class="footer-legal">
-      <a href="privacy.html">Confidențialitate</a>
+      <a href="privacy.html" data-i18n="footer.privacy">Confidențialitate</a>
       <span class="sep">&bull;</span>
-      <a href="terms.html">Termeni</a>
+      <a href="terms.html" data-i18n="footer.terms">Termeni</a>
       <span class="sep">&bull;</span>
       <a href="https://github.com/cosmintrica/SubtitlesFixer" target="_blank">GitHub</a>
       <span class="sep">&bull;</span>
@@ -373,6 +392,7 @@
     </div>
   </footer>
 
+  <script src="./i18n.js"></script>
   <script src="./site.js"></script>
 </body>
 </html>
