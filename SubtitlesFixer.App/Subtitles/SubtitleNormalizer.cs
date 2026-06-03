@@ -542,6 +542,12 @@ internal static partial class SubtitleNormalizer
             if (markers.Count == 0)
                 continue;
 
+            // In subtitrari, un singur "?" la final de cuvant este aproape mereu
+            // punctuatie reala. Repararea lui ca diacritica este ambigua si scumpa
+            // pe fisiere cu multe intrebari.
+            if (markers.Count == 1 && chars[markers[0]] == '?' && markers[0] == wordEnd - 1)
+                continue;
+
             // "asta???" si cazuri similare sunt punctuatie, nu litere lipsa.
             // Daca avem numai '?' consecutive la finalul token-ului, le lasam intacte.
             if (markers.Count >= 2 &&

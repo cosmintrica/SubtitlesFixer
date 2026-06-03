@@ -17,15 +17,31 @@ internal sealed class SubDLProvider : ISubtitleProvider
     {
         BaseAddress = new Uri("https://api.subdl.com/"),
         Timeout     = TimeSpan.FromSeconds(20),
-        DefaultRequestHeaders = { { "User-Agent", "SubtitlesFixer/1.2.0" } },
+        DefaultRequestHeaders = { { "User-Agent", UserAgent } },
     };
 
     private static readonly HttpClient DownloadHttp = new()
     {
         BaseAddress = new Uri("https://dl.subdl.com/"),
         Timeout     = TimeSpan.FromSeconds(60),
-        DefaultRequestHeaders = { { "User-Agent", "SubtitlesFixer/1.2.0" } },
+        DefaultRequestHeaders = { { "User-Agent", UserAgent } },
     };
+
+    private static string UserAgent
+    {
+        get
+        {
+            var assembly = typeof(SubDLProvider).Assembly;
+            var info = (System.Reflection.AssemblyInformationalVersionAttribute?)Attribute.GetCustomAttribute(
+                assembly,
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+            var version = info?.InformationalVersion ?? "unknown";
+            var plus = version.IndexOf('+');
+            if (plus >= 0)
+                version = version[..plus];
+            return $"SubtitlesFixer/{version}";
+        }
+    }
 
     // ────────────────────────────────────────────────────────────────────────
 

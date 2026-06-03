@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using Media = System.Windows.Media;
 using SubtitlesFixer.App.Subtitles;
@@ -31,6 +32,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private bool _autoUpdateChecked;
     private bool _isBusy;
     private bool _uiReady;
+    private bool _cancelRequested;
     private string _workProgressLabel = string.Empty;
 
     private Process? _runningProcess;
@@ -40,6 +42,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     public MainWindow()
     {
         InitializeComponent();
+        TaskbarItemInfo ??= new TaskbarItemInfo();
 
         RecurseCheckBox.IsChecked = _settings.IncludeSubfolders;
         OverwriteRoCheckBox.IsChecked = _settings.OverwriteExistingRo;
@@ -81,7 +84,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
             var paths = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
-            if (paths is { Length: > 0 } && Directory.Exists(paths[0]))
+            if (paths is { Length: > 0 } && (Directory.Exists(paths[0]) || File.Exists(paths[0])))
             {
                 e.Effects = System.Windows.DragDropEffects.Link;
                 e.Handled = true;
@@ -212,6 +215,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         await AnalyzeAndLoadPlanAsync().ConfigureAwait(true);
     }
 
+    private void CancelWorkButton_Click(object sender, RoutedEventArgs e)
+    {
+        _cancelRequested = true;
+        StatusTextBlock.Text = "Se opreste...";
+        AppendLogLine("[Oprire] Utilizatorul a cerut oprirea operatiei curente.");
+        KillRunningProcess();
+    }
+
     private async void RunButton_Click(object sender, RoutedEventArgs e)
     {
         if (!await EnsureFreshPlanAsync().ConfigureAwait(true))
@@ -298,6 +309,12 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             MainTabs.SelectedItem = LastRunTab;
             StatusTextBlock.Text = "Rulare terminata.";
+        }
+        catch (Exception ex)
+        when (ex is OperationCanceledException)
+        {
+            AppendLogLine("[OPRIT] Operatiunea a fost oprita.");
+            StatusTextBlock.Text = "Oprit.";
         }
         catch (Exception ex)
         {
@@ -467,6 +484,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             UpdatePlanHint();
             UpdateActionState();
             return true;
+        }
+        catch (Exception ex)
+        when (ex is OperationCanceledException)
+        {
+            AppendLogLine("[OPRIT] Analiza a fost oprita.");
+            StatusTextBlock.Text = "Oprit.";
+            return false;
         }
         catch (Exception ex)
         {
@@ -655,6 +679,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             FlushLogQueue();
             AppendLogLine(string.Empty);
             AppendLogLine($"[Proces incheiat cu codul {proc.ExitCode}]");
+            if (_cancelRequested)
+                throw new OperationCanceledException("Operatiunea a fost oprita.");
             if (proc.ExitCode != 0)
                 throw new InvalidOperationException($"Scriptul s-a oprit cu eroarea {proc.ExitCode}. Verifica jurnalul tehnic.");
         }
@@ -752,7 +778,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         var kindGroups = payload.Items
-            .GroupBy(i => GetMediaKind(i.Episode, i.VideoName, i.VideoPath))
+            .GroupBy(i => GetMediaKind(i.MediaKind, i.Episode, i.VideoName, i.VideoPath))
             .OrderBy(g => MediaKindSortKey(g.Key))
             .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -901,7 +927,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         LastRunSummaryPanel.Children.Add(header);
 
         var kindGroups = payload.Items
-            .GroupBy(i => GetMediaKind(i.Episode, i.VideoName, i.VideoPath))
+            .GroupBy(i => GetMediaKind(i.MediaKind, i.Episode, i.VideoName, i.VideoPath))
             .OrderBy(g => MediaKindSortKey(g.Key))
             .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -1311,6 +1337,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         WorkProgressBar.Maximum = 100;
         WorkProgressBar.Value = 0;
         WorkProgressBar.Visibility = Visibility.Visible;
+        UpdateTaskbarProgress(TaskbarItemProgressState.Indeterminate, 0);
     }
 
     private void EndWorkProgress()
@@ -1322,6 +1349,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         WorkProgressBar.IsIndeterminate = false;
         WorkProgressBar.Value = 0;
         WorkProgressBar.Visibility = Visibility.Collapsed;
+        UpdateTaskbarProgress(TaskbarItemProgressState.None, 0);
     }
 
     private bool TryHandleProgressLine(string line)
@@ -1345,10 +1373,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private void UpdateWorkProgress(int current, int total, string? itemLabel)
     {
         var singleItemPending = total == 1 && current <= 0;
+        var hasKnownProgress = total > 0 && !singleItemPending;
 
         if (WorkProgressBar is not null)
         {
-            WorkProgressBar.IsIndeterminate = total <= 0 || singleItemPending;
+            WorkProgressBar.IsIndeterminate = !hasKnownProgress;
             WorkProgressBar.Visibility = Visibility.Visible;
             if (total > 0)
             {
@@ -1358,17 +1387,37 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
+        if (hasKnownProgress)
+        {
+            var completed = Math.Max(0, Math.Min(current, total));
+            UpdateTaskbarProgress(TaskbarItemProgressState.Normal, completed / (double)total);
+        }
+        else
+        {
+            UpdateTaskbarProgress(TaskbarItemProgressState.Indeterminate, 0);
+        }
+
         var cleanLabel = Path.GetFileNameWithoutExtension(itemLabel ?? string.Empty);
         if (cleanLabel.Length > 56)
             cleanLabel = cleanLabel[..26] + "..." + cleanLabel[^24..];
+        // Scriptul emite deja indexul 1-based al item-ului curent (acelasi numar la
+        // inceputul si la finalul procesarii fiecarui item), deci afisam direct valoarea.
+        var displayCurrent = Math.Max(0, Math.Min(current, total));
         StatusTextBlock.Text = total switch
         {
             <= 0 => _workProgressLabel + "...",
             1 when singleItemPending => string.IsNullOrWhiteSpace(cleanLabel)
                 ? _workProgressLabel + "..."
                 : $"{_workProgressLabel}: {cleanLabel}",
-            _ => $"{_workProgressLabel} {current} din {total}" + (string.IsNullOrWhiteSpace(cleanLabel) ? string.Empty : $": {cleanLabel}")
+            _ => $"{_workProgressLabel} {displayCurrent} din {total}" + (string.IsNullOrWhiteSpace(cleanLabel) ? string.Empty : $": {cleanLabel}")
         };
+    }
+
+    private void UpdateTaskbarProgress(TaskbarItemProgressState state, double value)
+    {
+        TaskbarItemInfo ??= new TaskbarItemInfo();
+        TaskbarItemInfo.ProgressState = state;
+        TaskbarItemInfo.ProgressValue = Math.Clamp(value, 0, 1);
     }
 
     private static TextBlock CreatePlaceholderText(string message)
@@ -1402,6 +1451,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             RecurseCheckBox is null ||
             OverwriteRoCheckBox is null ||
             SearchOnlineButton is null ||
+            CancelWorkButton is null ||
             SelectAllRestoreButton is null ||
             ClearRestoreSelectionButton is null ||
             RestoreSelectedButton is null)
@@ -1413,6 +1463,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AnalyzeButton.IsEnabled = !_isBusy && hasValidFolder;
         RunButton.IsEnabled = !_isBusy && hasValidFolder;
         SearchOnlineButton.IsEnabled = !_isBusy;
+        CancelWorkButton.IsEnabled = _isBusy;
+        CancelWorkButton.Visibility = _isBusy ? Visibility.Visible : Visibility.Collapsed;
 
         var hasRestorableItems = _lastRun?.Items?.Any(CanRestoreItem) == true;
         var hasRestoreSelection = _lastRun?.Items?.Any(i => i.IsSelectedForRestore && CanRestoreItem(i)) == true;
@@ -1423,6 +1475,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SetBusyState(bool busy)
     {
+        if (busy)
+            _cancelRequested = false;
+
         _isBusy = busy;
         if (FolderPathBox is null || BrowseButton is null || RecurseCheckBox is null || OverwriteRoCheckBox is null)
             return;
@@ -2030,7 +2085,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (IsStandaloneSubtitleMode(item.ItemMode))
             return "Subtitrare";
 
-        return string.IsNullOrWhiteSpace(item.VideoName) ? "Folder" : "Fisier";
+        return IsMovieMedia(item.MediaKind, item.Episode, item.VideoName, item.VideoPath)
+            ? "Film"
+            : string.IsNullOrWhiteSpace(item.VideoName) ? "Folder" : "Fisier";
     }
 
     private static string PlanStatusLabel(FixPlanItem item, string status) => status switch
@@ -2062,13 +2119,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private static string PlanActionLabel(FixPlanItem item) => (item.Action ?? string.Empty).Trim().ToLowerInvariant() switch
     {
-        "create" => "Creez subtitrarea finala si mut subtitrarea sursa in backup.",
-        "overwrite" => "Refac subtitrarea finala si mut varianta veche in backup.",
+        "create" => IsMovieMedia(item.MediaKind, item.Episode, item.VideoName, item.VideoPath)
+            ? "Creez subtitrarea finala pentru film si mut subtitrarea sursa in backup."
+            : "Creez subtitrarea finala pentru episod si mut subtitrarea sursa in backup.",
+        "overwrite" => IsMovieMedia(item.MediaKind, item.Episode, item.VideoName, item.VideoPath)
+            ? "Refac subtitrarea finala pentru film si mut varianta veche in backup."
+            : "Refac subtitrarea finala pentru episod si mut varianta veche in backup.",
         "repair" => "Repar subtitrarea in acelasi fisier si mut originalul in backup.",
-        "skip-existing" => "Las episodul asa. Daca vrei sa il refaci, lasa activa suprascrierea.",
+        "skip-existing" => IsMovieMedia(item.MediaKind, item.Episode, item.VideoName, item.VideoPath)
+            ? "Las filmul asa. Daca vrei sa il refaci, lasa activa suprascrierea."
+            : "Las episodul asa. Daca vrei sa il refaci, lasa activa suprascrierea.",
         "already-ok" => IsStandaloneSubtitleMode(item.ItemMode)
             ? "Las subtitrarea asa. Fisierul este deja curat."
-            : "Las episodul asa. Exista deja subtitrarea finala.",
+            : IsMovieMedia(item.MediaKind, item.Episode, item.VideoName, item.VideoPath)
+                ? "Las filmul asa. Exista deja subtitrarea finala."
+                : "Las episodul asa. Exista deja subtitrarea finala.",
         _ => IsStandaloneSubtitleMode(item.ItemMode)
             ? "Nu schimb nimic la aceasta subtitrare."
             : "Nu schimb nimic.",
@@ -2124,9 +2189,23 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         return 500;
     }
 
-    private static string NormalizeSeasonKey(string? season) =>
-        string.IsNullOrWhiteSpace(season) || string.Equals(season?.Trim(), "Nesazonat", StringComparison.OrdinalIgnoreCase)
-            ? "Altele" : season!.Trim();
+    private static string NormalizeSeasonKey(string? season)
+    {
+        if (string.IsNullOrWhiteSpace(season) ||
+            string.Equals(season.Trim(), "Nesazonat", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Altele";
+        }
+
+        var trimmed = season.Trim();
+        if (Regex.Match(trimmed, @"^\d+$", RegexOptions.IgnoreCase) is { Success: true } numeric &&
+            int.TryParse(numeric.Value, out var seasonNumber))
+        {
+            return $"S{seasonNumber:00}";
+        }
+
+        return trimmed;
+    }
 
     private static bool IsNoSeasonKey(string key) =>
         string.IsNullOrWhiteSpace(key) || 
@@ -2134,12 +2213,28 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         string.Equals(key, "Other", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(key, "Nesazonat", StringComparison.OrdinalIgnoreCase);
 
-    private static string GetMediaKind(string? episode, string? videoName, string? videoPath)
+    private static bool IsMovieMedia(string? mediaKind, string? episode, string? videoName, string? videoPath) =>
+        string.Equals(GetMediaKind(mediaKind, episode, videoName, videoPath), "Filme", StringComparison.OrdinalIgnoreCase);
+
+    private static string GetMediaKind(string? mediaKind, string? episode, string? videoName, string? videoPath)
     {
+        var explicitKind = (mediaKind ?? string.Empty).Trim().ToLowerInvariant();
+        if (explicitKind is "film" or "movie" or "movies" or "filme")
+            return "Filme";
+        if (explicitKind is "series" or "serial" or "seriale" or "episode" or "episod")
+            return "Seriale";
+
         if (Regex.IsMatch(episode ?? string.Empty, @"^(S\d{1,2}E\d{1,2}|E\d{1,4}|\d{1,4})$", RegexOptions.IgnoreCase))
             return "Seriale";
 
-        var raw = videoName ?? (string.IsNullOrWhiteSpace(videoPath) ? string.Empty : Path.GetFileNameWithoutExtension(videoPath));
+        var raw = videoName;
+        if (string.IsNullOrWhiteSpace(raw) && !string.IsNullOrWhiteSpace(videoPath))
+            raw = Path.GetFileName(videoPath);
+        raw = Path.GetFileNameWithoutExtension(raw ?? string.Empty);
+
+        if (Regex.IsMatch(raw, @"(?<!\d)(?:19|20)\d{2}(?!\d)", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(raw, @"(?:^|[\s._-])(?:480p|720p|1080p|2160p|WEB[- ]?DL|WEBRip|BluRay|BRRip|BDRip|HDRip|DVDRip|AMZN|NF|H\.?264|H\.?265|x264|x265|HEVC)(?:[\s._-]|$)", RegexOptions.IgnoreCase))
+            return "Filme";
 
         #if DEBUG
         // Regex pt Titlu - 01 sau Titlu 01 la final sau in mijloc

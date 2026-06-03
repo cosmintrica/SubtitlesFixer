@@ -8,50 +8,41 @@ internal static class ScriptLocator
     private static string? _cachedPath;
 
     /// <summary>
-    /// Preferă întotdeauna fixsubs.ps1 lângă exe (ex. publish folder).
-    /// Doar dacă lipsește, extrage scriptul din resursă încorporată (ex. single-file).
-    /// Dictionarul words_ro.gz devine astfel opțional: dacă nu există lângă script,
-    /// motorul PowerShell rulează în modul rapid, fără costul mare al dictionarului.
+    /// Ruleaza preferabil scriptul livrat ca resursa embedded, nu un fisier
+    /// side-by-side care poate fi modificat dupa instalare. Fisierul de langa exe
+    /// ramane fallback pentru build-uri incomplete sau folosire manuala.
     /// </summary>
     public static string GetScriptPath()
     {
         if (_cachedPath is not null && File.Exists(_cachedPath))
             return _cachedPath;
 
-        var sideBySide = Path.Combine(AppContext.BaseDirectory, "fixsubs.ps1");
-        if (File.Exists(sideBySide))
+        var asm = Assembly.GetExecutingAssembly();
+        var scriptResourceName = FindEmbeddedResourceName(asm, "fixsubs.ps1");
+        if (scriptResourceName is not null)
         {
-            _cachedPath = sideBySide;
+            var dir = Path.Combine(Path.GetTempPath(), "SubtitlesFixer");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "fixsubs.ps1");
+            ExtractEmbeddedFile(asm, scriptResourceName, path, "fixsubs.ps1");
+
+            var dictionaryResourceName = FindEmbeddedResourceName(asm, "words_ro.gz");
+            if (dictionaryResourceName is not null)
+            {
+                var dictionaryPath = Path.Combine(dir, "words_ro.gz");
+                ExtractEmbeddedFile(asm, dictionaryResourceName, dictionaryPath, "words_ro.gz");
+            }
+
+            _cachedPath = path;
             return _cachedPath;
         }
 
-        var asm = Assembly.GetExecutingAssembly();
-        var scriptResourceName = FindEmbeddedResourceName(asm, "fixsubs.ps1");
-        if (scriptResourceName is null)
-        {
-            if (File.Exists(sideBySide))
-            {
-                _cachedPath = sideBySide;
-                return _cachedPath;
-            }
-
+        var sideBySide = Path.Combine(AppContext.BaseDirectory, "fixsubs.ps1");
+        if (!File.Exists(sideBySide))
             throw new InvalidOperationException(
-                "Lipsește fixsubs.ps1 lângă aplicație și nici resursă încorporată. Republish sau copiază fixsubs.ps1 lângă exe.");
-        }
+                "Lipseste fixsubs.ps1 langa aplicatie si nici resursa embedded nu exista. Republish sau copiaza fixsubs.ps1 langa exe.");
 
-        var dir = Path.Combine(Path.GetTempPath(), "SubtitlesFixer");
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, "fixsubs.ps1");
-        ExtractEmbeddedFile(asm, scriptResourceName, path, "fixsubs.ps1");
-
-        var dictionaryResourceName = FindEmbeddedResourceName(asm, "words_ro.gz");
-        if (dictionaryResourceName is not null)
-        {
-            var dictionaryPath = Path.Combine(dir, "words_ro.gz");
-            ExtractEmbeddedFile(asm, dictionaryResourceName, dictionaryPath, "words_ro.gz");
-        }
-
-        _cachedPath = path;
+        _cachedPath = sideBySide;
         return _cachedPath;
     }
 

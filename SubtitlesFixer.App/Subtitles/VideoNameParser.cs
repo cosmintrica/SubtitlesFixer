@@ -105,7 +105,7 @@ internal static partial class VideoNameParser
 
     private static bool LooksLikeMovieNumber(int numericEpisode, string rest)
     {
-        if (numericEpisode is >= 1900 and <= 2099 && string.IsNullOrWhiteSpace(rest))
+        if (numericEpisode is >= 1900 and <= 2099)
             return true;
 
         return !string.IsNullOrWhiteSpace(rest) && LikelyMovieTailRx().IsMatch(rest);

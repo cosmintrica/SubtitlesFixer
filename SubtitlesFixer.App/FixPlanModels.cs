@@ -29,6 +29,7 @@ public sealed class FixPlanTotals
 public sealed class FixPlanItem
 {
     public string? ItemMode { get; set; }
+    public string? MediaKind { get; set; }
     public string? Season { get; set; }
     public string? Episode { get; set; }
     public string? VideoName { get; set; }

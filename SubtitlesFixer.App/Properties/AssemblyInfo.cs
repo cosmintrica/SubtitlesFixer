@@ -1,15 +1,17 @@
 using System.Reflection;
 using System.Resources;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 
 [assembly: AssemblyCompany("Cosmin Trica")]
-[assembly: AssemblyCopyright("Copyright © 2026 Cosmin Trica. All rights reserved.")]
+[assembly: AssemblyCopyright("Copyright (c) 2026 Cosmin Trica. All rights reserved.")]
 [assembly: AssemblyDescription("Aplicatie desktop Windows pentru repararea, organizarea si restaurarea subtitrarilor .ro.srt.")]
-[assembly: AssemblyFileVersion("1.0.9.0")]
-[assembly: AssemblyInformationalVersion("1.0.9")]
+[assembly: AssemblyFileVersion("1.0.10.0")]
+[assembly: AssemblyInformationalVersion("1.0.10")]
 [assembly: AssemblyProduct("Subtitles Fixer")]
 [assembly: AssemblyTitle("SubtitlesFixer")]
 [assembly: AssemblyVersion("1.0.0.0")]
+[assembly: InternalsVisibleTo("SubtitlesFixer.Tests")]
 [assembly: NeutralResourcesLanguage("ro")]
 [assembly: SupportedOSPlatform("Windows7.0")]
 [assembly: TargetPlatform("Windows7.0")]

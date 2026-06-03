@@ -896,8 +896,9 @@ public partial class SubtitleSearchWindow : Wpf.Ui.Controls.FluentWindow
     {
         return new FixSummaryItem
         {
+            MediaKind = item.VideoInfo.IsSeries ? "series" : "film",
             Season = item.VideoInfo.IsSeries && item.VideoInfo.Season.HasValue
-                ? item.VideoInfo.Season.Value.ToString("00")
+                ? $"S{item.VideoInfo.Season.Value:00}"
                 : null,
             Episode = FormatEpisode(item.VideoInfo),
             VideoName = item.VideoName,

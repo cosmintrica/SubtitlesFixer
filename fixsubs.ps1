@@ -691,6 +691,14 @@ function Normalize-RO {
         continue
       }
 
+      # In subtitrari, un singur "?" la final de cuvant este aproape mereu
+      # punctuatie reala. Repararea lui ca diacritica este foarte ambigua si
+      # scumpa pe fisiere cu multe intrebari.
+      if ($markers.Count -eq 1 -and $chars[$markers[0]] -eq '?' -and $markers[0] -eq ($wordEnd - 1)) {
+        $repairTokenCache[$cacheKey] = $originalToken
+        continue
+      }
+
       # "asta???" si cazuri similare sunt punctuatie, nu litere lipsa.
       # Daca avem numai '?' consecutive la finalul token-ului, le lasam intacte.
       if ($markers.Count -ge 2) {
@@ -952,6 +960,21 @@ function Normalize-MediaKey {
   return $normalized.ToLowerInvariant()
 }
 
+function Test-LooksLikeMovieNumber {
+  param(
+    [int]$Number,
+    [string]$Rest
+  )
+
+  if ($Number -ge 1900 -and $Number -le 2099) { return $true }
+
+  $restNormalized = [regex]::Replace(([string]$Rest), '[._-]+', ' ')
+  $restNormalized = [regex]::Replace($restNormalized, '\s+', ' ').Trim()
+  if ([string]::IsNullOrWhiteSpace($restNormalized)) { return $false }
+
+  return $restNormalized -match '(?i)^(480p|576p|720p|1080p|2160p|4k|web\s?dl|webrip|bluray|brrip|bdrip|hdrip|dvdrip|dvd|remux|hdtv|amzn|nf|dsnp|hbo|max|hulu|h\s?264|h\s?265|x264|x265|hevc|avc|aac|dts|truehd|atmos|proper|repack|extended|internal)\b'
+}
+
 function Get-NumericEpisodeInfoFromVideoName {
   param([string]$name)
 
@@ -967,6 +990,13 @@ function Get-NumericEpisodeInfoFromVideoName {
   if ([string]::IsNullOrWhiteSpace($seriesKey) -or $seriesKey.Length -lt 2) { return $null }
 
   $episodeRaw = [string]$match.Groups['ep'].Value
+  $restRaw = [string]$match.Groups['rest'].Value
+  $episodeNumber = 0
+  if ([int]::TryParse($episodeRaw, [ref]$episodeNumber) -and
+      (Test-LooksLikeMovieNumber -Number $episodeNumber -Rest $restRaw)) {
+    return $null
+  }
+
   # Daca e 1 cifra, punem 0 in fata. Daca e deja 001, lasam asa.
   $episodeToken = if ($episodeRaw.Length -eq 1) { "0" + $episodeRaw } else { $episodeRaw }
 
@@ -977,6 +1007,124 @@ function Get-NumericEpisodeInfoFromVideoName {
     DisplayEpisode = "E" + $episodeToken
     SeasonKey = "Nesazonat"
   }
+}
+
+function Get-MovieTitleKey {
+  param([string]$name)
+
+  $base = [System.IO.Path]::GetFileNameWithoutExtension($name)
+  if ([string]::IsNullOrWhiteSpace($base)) { return "" }
+
+  $title = [regex]::Replace($base, '\[[^\]]*\]|\([^\)]*\)', ' ')
+  $title = [regex]::Replace($title, '[._]+', ' ')
+  $title = [regex]::Replace($title, '\s+', ' ').Trim(' ', '-', '_', '.')
+  $title = [regex]::Replace($title, '(?i)\s+(ro|ron|rum|romanian|romana|en|eng|english|sub|subs|subtitle|subtitles)$', '')
+
+  $marker = [regex]::Match(
+    $title,
+    '(?i)^(?<title>.*?)(?:\s+|^)((?:19|20)\d{2}|480p|720p|1080p|2160p|WEB\s?DL|WEBRip|BluRay|BRRip|BDRip|HDRip|DVDRip|AMZN|NF|H\s?264|H\s?265|x264|x265|HEVC)\b')
+  if ($marker.Success -and -not [string]::IsNullOrWhiteSpace($marker.Groups['title'].Value)) {
+    $title = $marker.Groups['title'].Value
+  }
+
+  return (Normalize-MediaKey $title)
+}
+
+function Get-MediaYear {
+  param([string]$name)
+
+  $match = [regex]::Match($name, '(?<!\d)((?:19|20)\d{2})(?!\d)')
+  if ($match.Success) { return $match.Groups[1].Value }
+  return ""
+}
+
+function Get-MediaTokens {
+  param([string]$key)
+
+  if ([string]::IsNullOrWhiteSpace($key)) { return @() }
+  return @(
+    $key.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries) |
+      Where-Object {
+        $_.Length -ge 1 -and
+        $_ -notmatch '^(480p|720p|1080p|2160p|web|webdl|webrip|bluray|brrip|bdrip|hdrip|dvdrip|amzn|nf|h264|h265|x264|x265|hevc)$'
+      }
+  )
+}
+
+function Get-MovieSubtitleScore {
+  param($Video, $Subtitle)
+
+  $videoBaseKey = Normalize-MediaKey ([System.IO.Path]::GetFileNameWithoutExtension($Video.Name))
+  $subBase = [System.IO.Path]::GetFileNameWithoutExtension($Subtitle.Name)
+  $subBase = [regex]::Replace($subBase, '(?i)([\s._-]+)(ro|ron|rum|romanian|romana|en|eng|english)$', '')
+  $subBaseKey = Normalize-MediaKey $subBase
+
+  $videoTitleKey = Get-MovieTitleKey $Video.Name
+  $subTitleKey = Get-MovieTitleKey $Subtitle.Name
+  if ([string]::IsNullOrWhiteSpace($videoTitleKey) -or [string]::IsNullOrWhiteSpace($subTitleKey)) {
+    return -1
+  }
+
+  $score = 0
+  if ($videoBaseKey.Equals($subBaseKey, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $score += 1000
+  }
+  if ($videoTitleKey.Equals($subTitleKey, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $score += 900
+  } elseif ($subTitleKey.Contains($videoTitleKey) -or $videoTitleKey.Contains($subTitleKey)) {
+    $score += 220
+  }
+
+  $videoTokens = @(Get-MediaTokens $videoTitleKey)
+  $subTokens = @(Get-MediaTokens $subTitleKey)
+  if ($videoTokens.Count -eq 0 -or $subTokens.Count -eq 0) { return $score }
+
+  $subTokenSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+  foreach ($token in $subTokens) { [void]$subTokenSet.Add($token) }
+
+  $common = 0
+  foreach ($token in $videoTokens) {
+    if ($subTokenSet.Contains($token)) { $common++ }
+  }
+
+  $coverage = $common / [double]$videoTokens.Count
+  $score += [int]([Math]::Round($coverage * 100))
+  $score += ($common * 20)
+
+  $videoYear = Get-MediaYear $Video.Name
+  $subYear = Get-MediaYear $Subtitle.Name
+  if (-not [string]::IsNullOrWhiteSpace($videoYear) -and $videoYear.Equals($subYear, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $score += 80
+  }
+
+  if ($common -eq 0) { return -1 }
+  if ($videoTokens.Count -ge 2 -and $coverage -lt 0.5 -and $score -lt 900) { return -1 }
+
+  return $score
+}
+
+function Get-CandidateMovieSubtitles {
+  param($subsAll, $video, [int]$videoCountInDir)
+
+  if ($subsAll.Count -eq 0) { return @() }
+  if ($videoCountInDir -eq 1 -and $subsAll.Count -eq 1) { return @($subsAll[0]) }
+
+  $ranked = @()
+  foreach ($sub in $subsAll) {
+    $score = Get-MovieSubtitleScore -Video $video -Subtitle $sub
+    if ($score -ge 120) {
+      $ranked += [pscustomobject]@{
+        Subtitle = $sub
+        Score = $score
+      }
+    }
+  }
+
+  return @(
+    $ranked |
+      Sort-Object @{ Expression = { -1 * $_.Score } }, @{ Expression = { $_.Subtitle.Name.Length } }, @{ Expression = { $_.Subtitle.Name } } |
+      ForEach-Object { $_.Subtitle }
+  )
 }
 
 # Ex: "...Shepherd.1.1080p" -> 1 (doar 1 sau 2, ca sa nu confundam ".38.1080p")
@@ -1229,8 +1377,16 @@ function Get-StandaloneSubtitleMetadata {
   $numericEpisodeInfo = if ($episodeTags.Count -eq 0) { Get-NumericEpisodeInfoFromVideoName $Subtitle.Name } else { $null }
   $episode = if ($episodeTags.Count -gt 0) { $episodeTags[0] } elseif ($numericEpisodeInfo) { [string]$numericEpisodeInfo.DisplayEpisode } else { "" }
   $seasonKey = if ($episodeTags.Count -gt 0) { Get-SeasonKey $episode } elseif ($numericEpisodeInfo) { [string]$numericEpisodeInfo.SeasonKey } else { "Nesazonat" }
+  $mediaKind = if ($episodeTags.Count -gt 0 -or $numericEpisodeInfo) {
+    "series"
+  } elseif (-not [string]::IsNullOrWhiteSpace((Get-MovieTitleKey $Subtitle.Name))) {
+    "film"
+  } else {
+    "unknown"
+  }
 
   return [ordered]@{
+    MediaKind = $mediaKind
     Season = $seasonKey
     Episode = $episode
   }
@@ -1255,6 +1411,19 @@ function Get-StandaloneNormalizationResult {
   }
 }
 
+function Get-StandaloneNormalizationPreviewResult {
+  param([string]$Path)
+
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  $res = Decode-Best $bytes
+  $needsTextCleanup = Test-StandaloneNeedsNormalization $res.Text
+
+  return [ordered]@{
+    Changed = ($res.Name -ne "UTF-8" -or $needsTextCleanup)
+    EncodingName = $res.Name
+  }
+}
+
 function Process-StandaloneSubtitle {
   param(
     [string]$Root,
@@ -1264,6 +1433,7 @@ function Process-StandaloneSubtitle {
   )
 
   $meta = Get-StandaloneSubtitleMetadata $Subtitle
+  $mediaKind = [string]$meta.MediaKind
   $seasonKey = [string]$meta.Season
   $episode = [string]$meta.Episode
 
@@ -1272,7 +1442,7 @@ function Process-StandaloneSubtitle {
 
   if ($PreviewOnly) {
     try {
-      $analysis = Get-StandaloneNormalizationResult $Subtitle.FullName
+      $analysis = Get-StandaloneNormalizationPreviewResult $Subtitle.FullName
       if ($analysis.Changed) {
         $previewAction = "repair"
         $previewStatus = "ready"
@@ -1285,6 +1455,7 @@ function Process-StandaloneSubtitle {
 
       Add-PreviewItem ([ordered]@{
           itemMode = "subtitle-only"
+          mediaKind = $mediaKind
           season = $seasonKey
           episode = $episode
           videoName = $Subtitle.Name
@@ -1304,6 +1475,7 @@ function Process-StandaloneSubtitle {
     } catch {
       Add-PreviewItem ([ordered]@{
           itemMode = "subtitle-only"
+          mediaKind = $mediaKind
           season = $seasonKey
           episode = $episode
           videoName = $Subtitle.Name
@@ -1333,6 +1505,7 @@ function Process-StandaloneSubtitle {
       $script:totalOk++
       [void]$script:summaryItems.Add([ordered]@{
           itemMode = "subtitle-only"
+          mediaKind = $mediaKind
           season = $seasonKey
           episode = $episode
           videoName = $Subtitle.Name
@@ -1377,6 +1550,7 @@ function Process-StandaloneSubtitle {
     $script:totalOk++
     [void]$script:summaryItems.Add([ordered]@{
         itemMode = "subtitle-only"
+        mediaKind = $mediaKind
         season = $seasonKey
         episode = $episode
         videoName = $Subtitle.Name
@@ -1397,6 +1571,7 @@ function Process-StandaloneSubtitle {
     $script:totalErr++
     [void]$script:summaryItems.Add([ordered]@{
         itemMode = "subtitle-only"
+        mediaKind = $mediaKind
         season = $seasonKey
         episode = $episode
         videoName = $Subtitle.Name
@@ -1549,7 +1724,7 @@ foreach ($root in $Paths) {
     }
 
     foreach ($video in $g.Group) {
-      Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
+      Write-Host "__SF_PROGRESS__|$($processedWorkItemsInRoot + 1)|$totalWorkItemsInRoot|$($video.Name)"
       Write-Host "-----------------------------------------"
       Write-Host "VIDEO:"
       Write-Host "  $($video.FullName)"
@@ -1559,6 +1734,8 @@ foreach ($root in $Paths) {
 
       $episodeTags = Get-EpisodeTagsFromVideoName $video.Name
       $numericEpisodeInfo = $null
+      $isMovie = $false
+      $movieTitleKey = ""
       if ($episodeTags.Count -eq 0) {
         $numericCandidate = Get-NumericEpisodeInfoFromVideoName $video.Name
         if ($numericCandidate -and
@@ -1571,11 +1748,18 @@ foreach ($root in $Paths) {
           }
         }
       }
+      if ($episodeTags.Count -eq 0 -and -not $numericEpisodeInfo) {
+        $movieTitleKey = Get-MovieTitleKey $video.Name
+        if (-not [string]::IsNullOrWhiteSpace($movieTitleKey)) {
+          $isMovie = $true
+        }
+      }
 
-      if ($episodeTags.Count -eq 0) {
+      if ($episodeTags.Count -eq 0 -and -not $isMovie) {
         Write-Host "  [WARN] Nu pot detecta SxxEyy." -ForegroundColor Yellow
         $totalWarn++
         [void]$summaryItems.Add([ordered]@{
+            mediaKind = "unknown"
             season  = "Nesazonat"
             episode = ""
             videoName = $video.Name
@@ -1584,6 +1768,7 @@ foreach ($root in $Paths) {
             message = "Nu pot detecta pattern SxxEyy in numele fisierului video."
           })
         Add-PreviewItem ([ordered]@{
+            mediaKind = "unknown"
             season = "Nesazonat"
             episode = ""
             videoName = $video.Name
@@ -1601,18 +1786,30 @@ foreach ($root in $Paths) {
             candidates = @()
           })
         Write-Host ""
+        $processedWorkItemsInRoot++
+        Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
         continue
       }
 
-      $episode = if ($numericEpisodeInfo) { [string]$numericEpisodeInfo.DisplayEpisode } else { $episodeTags[0] }
-      $seasonKey = if ($numericEpisodeInfo) { [string]$numericEpisodeInfo.SeasonKey } else { (Get-SeasonKey $episode) }
-      Write-Host "  EPISOD DETECTAT: $episode"
-      if ($episodeTags.Count -gt 1) {
-        Write-Host "  (tag-uri episod: $($episodeTags -join ', '))"
+      $episode = if ($isMovie) { "" } elseif ($numericEpisodeInfo) { [string]$numericEpisodeInfo.DisplayEpisode } else { $episodeTags[0] }
+      $seasonKey = if ($isMovie) { "Nesazonat" } elseif ($numericEpisodeInfo) { [string]$numericEpisodeInfo.SeasonKey } else { (Get-SeasonKey $episode) }
+      $mediaKind = if ($isMovie) { "film" } else { "series" }
+      $mediaHint = if ($isMovie) { "filmul '$movieTitleKey'" } else { ($episodeTags -join ' sau ') }
+      if ($isMovie) {
+        Write-Host "  FILM DETECTAT: $movieTitleKey"
+      } else {
+        Write-Host "  EPISOD DETECTAT: $episode"
+        if ($episodeTags.Count -gt 1) {
+          Write-Host "  (tag-uri episod: $($episodeTags -join ', '))"
+        }
       }
       Write-Host ""
 
-      $candidateSubs = Get-CandidateSubtitles -subsAll $subsAll -tags $episodeTags
+      $candidateSubs = if ($isMovie) {
+        Get-CandidateMovieSubtitles -subsAll $subsAll -video $video -videoCountInDir @($g.Group).Count
+      } else {
+        Get-CandidateSubtitles -subsAll $subsAll -tags $episodeTags
+      }
       $candidateDtos = @()
       foreach ($candidate in $candidateSubs) {
         $candidateDtos += [ordered]@{
@@ -1626,7 +1823,11 @@ foreach ($root in $Paths) {
       $selectionMessage = [string]$manualSelection.Message
       $subtitle = $manualSelection.Selected
       if (-not $subtitle -and $candidateSubs.Count -gt 0) {
-        $subtitle = Select-SubtitleForVideo -subsAll $candidateSubs -video $video -tags $episodeTags
+        $subtitle = if ($isMovie) {
+          $candidateSubs | Select-Object -First 1
+        } else {
+          Select-SubtitleForVideo -subsAll $candidateSubs -video $video -tags $episodeTags
+        }
         if ($subtitle -and $selectionMode -eq "none") {
           $selectionMode = "auto"
         }
@@ -1641,7 +1842,6 @@ foreach ($root in $Paths) {
         $previewMessage = ""
 
         if (-not $subtitle) {
-          $tagHint = ($episodeTags -join ' sau ')
           if (Test-Path $newPath) {
             $previewStatus = "ready"
             $previewAction = "already-ok"
@@ -1649,7 +1849,7 @@ foreach ($root in $Paths) {
           } elseif (-not [string]::IsNullOrWhiteSpace($selectionMessage)) {
             $previewMessage = $selectionMessage
           } else {
-            $previewMessage = "Nu am gasit nicio subtitrare potrivita pentru $tagHint in acest folder."
+            $previewMessage = "Nu am gasit nicio subtitrare potrivita pentru $mediaHint in acest folder."
           }
         } else {
           if (Test-Path $newPath) {
@@ -1696,6 +1896,7 @@ foreach ($root in $Paths) {
         }
 
         Add-PreviewItem ([ordered]@{
+            mediaKind = $mediaKind
             season = $seasonKey
             episode = $episode
             videoName = $video.Name
@@ -1713,6 +1914,8 @@ foreach ($root in $Paths) {
             candidates = $candidateDtos
           })
         Write-Host ""
+        $processedWorkItemsInRoot++
+        Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
         continue
       }
 
@@ -1721,6 +1924,7 @@ foreach ($root in $Paths) {
         Write-Host "  [EROARE] $errorMessage" -ForegroundColor Red
         $totalErr++
         [void]$summaryItems.Add([ordered]@{
+            mediaKind = $mediaKind
             season  = $seasonKey
             episode = $episode
             videoName = $video.Name
@@ -1731,27 +1935,33 @@ foreach ($root in $Paths) {
             message = $errorMessage
           })
         Write-Host ""
+        $processedWorkItemsInRoot++
+        Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
         continue
       }
 
       if (-not $subtitle) {
-        $tagHint = ($episodeTags -join ' sau ')
-        $roForEp = Get-ChildItem -Path $dir -File -Filter *.srt -ErrorAction SilentlyContinue |
-          Where-Object {
-            $n = $_.Name
-            if ($n -notmatch '\.ro\.srt$') { return $false }
-            foreach ($t in $episodeTags) {
-              if ($n -match [regex]::Escape($t)) { return $true }
-            }
-            return $false
-          } |
-          Select-Object -First 1
+        $roForEp = if ($isMovie) {
+          $null
+        } else {
+          Get-ChildItem -Path $dir -File -Filter *.srt -ErrorAction SilentlyContinue |
+            Where-Object {
+              $n = $_.Name
+              if ($n -notmatch '\.ro\.srt$') { return $false }
+              foreach ($t in $episodeTags) {
+                if ($n -match [regex]::Escape($t)) { return $true }
+              }
+              return $false
+            } |
+            Select-Object -First 1
+        }
 
         if (Test-Path $newPath) {
           $msg = "Exista deja subtitrarea finala. Nu schimb nimic aici."
           Write-Host "  [OK] $msg" -ForegroundColor Green
           $totalOk++
           [void]$summaryItems.Add([ordered]@{
+              mediaKind = $mediaKind
               season  = $seasonKey
               episode = $episode
               videoName = $video.Name
@@ -1762,6 +1972,8 @@ foreach ($root in $Paths) {
               message = $msg
             })
           Write-Host ""
+          $processedWorkItemsInRoot++
+          Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
           continue
         }
 
@@ -1769,15 +1981,16 @@ foreach ($root in $Paths) {
           $msg = $selectionMessage
           Write-Host "  [WARN] $msg" -ForegroundColor Yellow
         } elseif ($roForEp) {
-          $msg = "Exista deja un .ro.srt pentru $tagHint, dar subtitrarea sursa nu mai este in folder. Daca vrei sa refac episodul, pune inapoi fisierul .srt original."
+          $msg = "Exista deja un .ro.srt pentru $mediaHint, dar subtitrarea sursa nu mai este in folder. Daca vrei sa refac episodul, pune inapoi fisierul .srt original."
           Write-Host "  [WARN] $msg" -ForegroundColor Yellow
         } else {
-          $msg = "Nu am gasit nicio subtitrare .srt potrivita pentru $tagHint in acest folder."
-          Write-Host "  [WARN] Nu exista subtitrare .srt pentru $tagHint in folder." -ForegroundColor Yellow
+          $msg = "Nu am gasit nicio subtitrare .srt potrivita pentru $mediaHint in acest folder."
+          Write-Host "  [WARN] Nu exista subtitrare .srt pentru $mediaHint in folder." -ForegroundColor Yellow
         }
 
         $totalWarn++
         [void]$summaryItems.Add([ordered]@{
+            mediaKind = $mediaKind
             season  = $seasonKey
             episode = $episode
             videoName = $video.Name
@@ -1788,6 +2001,8 @@ foreach ($root in $Paths) {
             message = $msg
           })
         Write-Host ""
+        $processedWorkItemsInRoot++
+        Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
         continue
       }
 
@@ -1803,6 +2018,7 @@ foreach ($root in $Paths) {
           Write-Host "  [HINT] Ruleaza cu -OverwriteRo ca sa refaci din subtitrarea sursa (.srt)." -ForegroundColor DarkGray
           $totalWarn++
           [void]$summaryItems.Add([ordered]@{
+              mediaKind = $mediaKind
               season  = $seasonKey
               episode = $episode
               videoName = $video.Name
@@ -1814,6 +2030,8 @@ foreach ($root in $Paths) {
               message = "Exista deja subtitrarea finala. Activeaza suprascrierea daca vrei sa o refaci."
             })
           Write-Host ""
+          $processedWorkItemsInRoot++
+          Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($video.Name)"
           continue
         }
       }
@@ -1868,6 +2086,7 @@ foreach ($root in $Paths) {
         Write-Host "  [OK]" -ForegroundColor Green
         $totalOk++
         [void]$summaryItems.Add([ordered]@{
+            mediaKind = $mediaKind
             season  = $seasonKey
             episode = $episode
             videoName = $video.Name
@@ -1899,6 +2118,7 @@ foreach ($root in $Paths) {
         Write-Host "  [EROARE] $errorMessage" -ForegroundColor Red
         $totalErr++
         [void]$summaryItems.Add([ordered]@{
+            mediaKind = $mediaKind
             season  = $seasonKey
             episode = $episode
             videoName = $video.Name
@@ -1918,7 +2138,7 @@ foreach ($root in $Paths) {
   }
 
   foreach ($standaloneSubtitle in $standaloneSubs) {
-    Write-Host "__SF_PROGRESS__|$processedWorkItemsInRoot|$totalWorkItemsInRoot|$($standaloneSubtitle.Name)"
+    Write-Host "__SF_PROGRESS__|$($processedWorkItemsInRoot + 1)|$totalWorkItemsInRoot|$($standaloneSubtitle.Name)"
     Write-Host "-----------------------------------------"
     Process-StandaloneSubtitle -Root $root -BackupRoot $backupRoot -Subtitle $standaloneSubtitle -PreviewOnly:$PreviewOnly
     Write-Host ""

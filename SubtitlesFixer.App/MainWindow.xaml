@@ -111,6 +111,13 @@
                                Content="Cauta subtitrari online"
                                ToolTip="Deschide cautarea online pentru episoadele sau filmele care nu au inca subtitrare finala"
                                Click="SearchOnlineButton_Click" />
+                    <ui:Button x:Name="CancelWorkButton"
+                               Margin="0,0,16,10"
+                               Appearance="Danger"
+                               Content="Opreste"
+                               Visibility="Collapsed"
+                               ToolTip="Opreste analiza sau rularea curenta"
+                               Click="CancelWorkButton_Click" />
                     <TextBlock x:Name="StatusTextBlock"
                                Margin="0,2,0,10"
                                VerticalAlignment="Center"
@@ -233,7 +240,7 @@
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            FontSize="10.5"
-                           Text="Subtitles Fixer v1.0.9 · Cosmin Trica" />
+                           Text="Subtitles Fixer v1.0.10 · Cosmin Trica" />
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"

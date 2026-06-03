@@ -26,6 +26,7 @@ public sealed class FixTotals
 public sealed class FixSummaryItem
 {
     public string? ItemMode { get; set; }
+    public string? MediaKind { get; set; }
     public string? Season { get; set; }
     public string? Episode { get; set; }
     public string? VideoName { get; set; }

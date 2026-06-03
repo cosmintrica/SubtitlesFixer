@@ -1,10 +1,13 @@
 publish/
 Releases/
+SubtitlesFixer-win-*.exe
+SubtitlesFixer-win-*.zip
 .vs/
 bin/
 obj/
 *.user
 backups/
+.test-tmp/
 PUBLISH.md
 docs/PUBLISH.md
 ignore for tests/

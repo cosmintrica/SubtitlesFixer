@@ -28,7 +28,7 @@ window.SubtitlesFixerI18n = {
       revolutDesc: "Susținere rapidă cu Revolut Pay",
       stripeDesc: "Card bancar sau Google/Apple Pay",
       noteHtml:
-        "<strong>Noutăți în v{version}:</strong> publicare Velopack fără coliziune cu release-ul anterior, dropdown de donații refăcut pentru mobil și fundal full-width mai fluid pentru pagină."
+        "<strong>Noutăți în v{version}:</strong> filme detectate mai corect, preview rapid pentru subtitrări standalone, progres real în taskbar și fundal dark stabil pe desktop/iPhone."
     },
     mockup: {
       chipChanging: "Se schimbă",
@@ -175,7 +175,7 @@ window.SubtitlesFixerI18n = {
       revolutDesc: "Quick support via Revolut Pay",
       stripeDesc: "Bank card or Google/Apple Pay",
       noteHtml:
-        "<strong>What's new in v{version}:</strong> Velopack publish without colliding with the previous release, redesigned donate dropdown for mobile, and smoother full-width page background."
+        "<strong>What's new in v{version}:</strong> better movie detection, faster standalone-subtitle preview, real taskbar progress, and a stable dark background on desktop/iPhone."
     },
     mockup: {
       chipChanging: "Changing",

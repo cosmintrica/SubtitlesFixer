@@ -26,11 +26,16 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          [xml]$project = Get-Content "SubtitlesFixer.App/SubtitlesFixer.App.csproj"
-          $version = $project.Project.PropertyGroup.Version | Select-Object -First 1
+          $versionPayload = Get-Content "version.json" -Raw | ConvertFrom-Json
+          $version = [string]$versionPayload.version
           if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Nu am putut citi <Version> din SubtitlesFixer.App.csproj."
+            throw "Nu am putut citi versiunea din version.json."
           }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Versiunea din version.json trebuie sa fie SemVer simplu, ex: 1.0.10."
+          }
+
+          ./scripts/sync-version.ps1 -Verify
 
           if ("${{ github.ref_type }}" -eq "tag") {
             $expectedTag = "v$version"
@@ -40,6 +45,12 @@ jobs:
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build and run regression tests
+        shell: pwsh
+        run: |
+          dotnet build "SubtitlesFixer.sln" -c Release
+          dotnet run --project "SubtitlesFixer.Tests/SubtitlesFixer.Tests.csproj" -c Release --no-build
 
       - name: Publish application
         shell: pwsh
@@ -65,6 +76,21 @@ jobs:
           vpk download github `
             --repoUrl "https://github.com/${{ github.repository }}" `
             --token "${{ secrets.GITHUB_TOKEN }}"
+
+          $currentVersion = [Version]"${{ steps.version.outputs.version }}"
+          $blockingVersion = Get-ChildItem -Path Releases -Filter "SubtitlesFixer-*-full.nupkg" -ErrorAction SilentlyContinue |
+            ForEach-Object {
+              if ($_.BaseName -match '^SubtitlesFixer-(?<version>\d+\.\d+\.\d+(?:\.\d+)?)-') {
+                [Version]$Matches.version
+              }
+            } |
+            Where-Object { $_ -ge $currentVersion } |
+            Sort-Object -Descending |
+            Select-Object -First 1
+
+          if ($blockingVersion) {
+            throw "Channel-ul win are deja versiunea $blockingVersion, egala sau mai mare decat $currentVersion. Creste version.json si reporneste release-ul."
+          }
 
           vpk pack `
             --packId "SubtitlesFixer" `

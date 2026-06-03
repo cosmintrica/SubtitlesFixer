@@ -155,6 +155,7 @@ internal static class StandaloneSubtitleRepairer
         return new FixPlanItem
         {
             ItemMode = "subtitle-only",
+            MediaKind = meta.MediaKind,
             Season = meta.Season,
             Episode = meta.Episode,
             VideoName = Path.GetFileName(path),
@@ -185,6 +186,7 @@ internal static class StandaloneSubtitleRepairer
             return new FixSummaryItem
             {
                 ItemMode = "subtitle-only",
+                MediaKind = meta.MediaKind,
                 Season = meta.Season,
                 Episode = meta.Episode,
                 VideoName = Path.GetFileName(path),
@@ -223,6 +225,7 @@ internal static class StandaloneSubtitleRepairer
         return new FixSummaryItem
         {
             ItemMode = "subtitle-only",
+            MediaKind = meta.MediaKind,
             Season = meta.Season,
             Episode = meta.Episode,
             VideoName = Path.GetFileName(path),
@@ -250,7 +253,7 @@ internal static class StandaloneSubtitleRepairer
             NormalizedText: normalized);
     }
 
-    private static (string Season, string Episode) GetMetadata(string path)
+    private static (string MediaKind, string Season, string Episode) GetMetadata(string path)
     {
         var info = VideoNameParser.Parse(Path.GetFileName(path));
         if (info.HasNumericEpisodeCandidate)
@@ -258,10 +261,10 @@ internal static class StandaloneSubtitleRepairer
 
         if (info.IsSeries && info.Season.HasValue && info.Episode.HasValue)
         {
-            return ($"S{info.Season.Value:00}", $"S{info.Season.Value:00}E{info.Episode.Value:00}");
+            return ("series", $"S{info.Season.Value:00}", $"S{info.Season.Value:00}E{info.Episode.Value:00}");
         }
 
-        return ("Nesazonat", string.Empty);
+        return ("film", "Nesazonat", string.Empty);
     }
 
     private static FixPlanItem BuildErrorPlanItem(string path, string message)
@@ -270,6 +273,7 @@ internal static class StandaloneSubtitleRepairer
         return new FixPlanItem
         {
             ItemMode = "subtitle-only",
+            MediaKind = meta.MediaKind,
             Season = meta.Season,
             Episode = meta.Episode,
             VideoName = Path.GetFileName(path),
