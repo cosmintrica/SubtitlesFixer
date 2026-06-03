@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SubtitlesFixer.App.Subtitles;
 
 internal static class Program
@@ -12,6 +13,7 @@ internal static class Program
             ("VideoNameParser classifica anii de film ca filme", TestVideoNameParser),
             ("SubtitleNormalizer pastreaza intrebarea finala ca punctuatie", TestSubtitleNormalizerQuestionPunctuation),
             ("fixsubs.ps1 preview clasifica filme/seriale si termina progresul", TestPowerShellPreview),
+            ("fixsubs.ps1 apply repara encoding/diacritice/markeri si pastreaza punctuatia", TestPowerShellApplyRepair),
         };
 
         var failed = 0;
@@ -102,6 +104,119 @@ internal static class Program
             if (Directory.Exists(testRoot))
                 Directory.Delete(testRoot, recursive: true);
         }
+    }
+
+    private static void TestPowerShellApplyRepair()
+    {
+        // Apply (reparare reala) are nevoie de dictionar. Folosim perechea
+        // fixsubs.ps1 + words_ro.gz copiata langa testul compilat (nu repo root,
+        // care nu are dictionarul).
+        var baseDir = AppContext.BaseDirectory;
+        var script = Path.Combine(baseDir, "fixsubs.ps1");
+        var dict = Path.Combine(baseDir, "words_ro.gz");
+        AssertTrue(File.Exists(script), "fixsubs.ps1 lipseste langa testul compilat.");
+        AssertTrue(File.Exists(dict), "words_ro.gz lipseste langa testul compilat (necesar pentru repararea cu dictionar).");
+
+        var testRoot = Path.Combine(baseDir, ".apply-tmp", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(testRoot);
+
+        try
+        {
+            const char sCedilla = 'ş';   // s-cedilla (gresit) -> trebuie s-virgula (ș)
+            const char tCedilla = 'ţ';   // t-cedilla (gresit) -> trebuie t-virgula (ț)
+            const char aCirc = 'â';      // a circumflex
+            const char repl = '�';       // replacement char (marker)
+            const char backtick = '`';        // backtick (marker)
+
+            // SRT cu LF-only, spatii in coada, si toate tipurile de probleme.
+            var lines = new[]
+            {
+                "1", "00:00:01,000 --> 00:00:02,000",
+                $"Te rog, f?r? {sCedilla}i s?n?tate.   ",          // marker ?, cedilla, marker ?, trailing spaces
+                "",
+                "2", "00:00:02,000 --> 00:00:03,000",
+                $"Nu m-am n{backtick}scut ieri, p{repl}dure.",      // marker backtick + marker FFFD
+                "",
+                "3", "00:00:03,000 --> 00:00:04,000",
+                $"{aCirc}nainte de toate, pune-?i haina.",          // a-circ initial -> i-circ, context -?i
+                "",
+                "4", "00:00:04,000 --> 00:00:05,000",
+                $"To{tCedilla}i au plecat. Ce faci? Serios???",     // cedilla + pastrare ? si ???
+                "",
+                "5", "00:00:05,000 --> 00:00:06,000",
+                "? Hello darkness my old friend ?",                 // note muzicale
+                "",
+            };
+            var broken = string.Join("\n", lines);  // LF only
+            var file = Path.Combine(testRoot, "Inception.2010.1080p.BluRay.ro.srt");
+            File.WriteAllText(file, broken, new UTF8Encoding(false));
+
+            var res = RunPowerShellApply(script, testRoot);
+            AssertEqual(0, res.ExitCode, res.Output + res.Error);
+
+            var after = File.ReadAllText(file, Encoding.UTF8);
+
+            // --- reparari care TREBUIE sa se intample ---
+            AssertTrue(after.Contains("fără"), "f?r? trebuie reparat la fara (cu a-breve).");
+            AssertTrue(after.Contains("sănătate"), "s?n?tate trebuie reparat la sanatate.");
+            AssertTrue(after.Contains("și "), "s-cedilla trebuie convertit la s-virgula (si).");
+            AssertTrue(after.Contains("născut"), "n`scut (backtick) trebuie reparat la nascut.");
+            AssertTrue(after.Contains("pădure"), "p<FFFD>dure trebuie reparat la padure.");
+            AssertTrue(after.Contains("înainte"), "a circumflex initial trebuie convertit la i circumflex (inainte).");
+            AssertTrue(after.Contains("pune-ți"), "pune-?i trebuie reparat la pune-ti (regula de context).");
+            AssertTrue(after.Contains("Toți"), "t-cedilla trebuie convertit la t-virgula (Toti).");
+            AssertTrue(after.Contains("♪"), "? la marginea liniei trebuie sa devina nota muzicala.");
+
+            // --- punctuatie care TREBUIE pastrata ---
+            AssertTrue(after.Contains("faci?"), "Semnul de intrebare final trebuie pastrat.");
+            AssertTrue(after.Contains("Serios???"), "Intrebarile multiple trebuie pastrate.");
+
+            // --- structural ---
+            AssertTrue(after.Contains("\r\n"), "Fisierul trebuie sa aiba CRLF.");
+            AssertFalse(Regex.IsMatch(after, "(?<!\r)\n"), "Nu trebuie sa ramana LF singur.");
+            AssertFalse(Regex.IsMatch(after, "[ \t]+(?=\r?\n|\\z)"), "Spatiile in coada trebuie eliminate.");
+            AssertFalse(after.Contains('ş') || after.Contains('ţ') ||
+                        after.Contains('Ş') || after.Contains('Ţ'), "Nu trebuie sa ramana cedile.");
+            AssertFalse(after.Contains('�'), "Nu trebuie sa ramana caractere FFFD.");
+        }
+        finally
+        {
+            if (Directory.Exists(testRoot))
+                Directory.Delete(testRoot, recursive: true);
+        }
+    }
+
+    private static (int ExitCode, string Output, string Error) RunPowerShellApply(string script, string folder)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        process.StartInfo.ArgumentList.Add("-NoProfile");
+        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
+        process.StartInfo.ArgumentList.Add("Bypass");
+        process.StartInfo.ArgumentList.Add("-File");
+        process.StartInfo.ArgumentList.Add(script);
+        process.StartInfo.ArgumentList.Add("-NoPause");
+        process.StartInfo.ArgumentList.Add("-Paths");
+        process.StartInfo.ArgumentList.Add(folder);
+
+        process.Start();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(60_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("fixsubs.ps1 (apply) nu a terminat in 60 secunde.");
+        }
+
+        return (process.ExitCode, outputTask.GetAwaiter().GetResult(), errorTask.GetAwaiter().GetResult());
     }
 
     private static JsonElement FindItem(JsonElement[] items, string videoName)
